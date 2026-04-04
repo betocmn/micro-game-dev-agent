@@ -85,7 +85,8 @@ export default function Home() {
           </p>
         )}
 
-        {generations?.map((gen) => {
+        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+        {generations?.map((gen: any) => {
           const spec = gen.spec ? JSON.parse(gen.spec) : null;
 
           return (

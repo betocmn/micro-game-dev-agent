@@ -161,7 +161,8 @@ export default function GenerationPage({
             <div className="bg-gray-900 border border-gray-800 rounded-lg p-3">
               <h3 className="font-medium mb-3">Eval Results</h3>
               <div className="space-y-2">
-                {generation.evalRuns.map((evalRun) => {
+                {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                {generation.evalRuns.map((evalRun: any) => {
                   const result = evalRun.result
                     ? JSON.parse(evalRun.result)
                     : null;
