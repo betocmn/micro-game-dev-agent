@@ -18,6 +18,7 @@ import {
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 
+
 export default function GenerationPage({
 	params,
 }: {
@@ -169,6 +170,7 @@ export default function GenerationPage({
 										evalRun.type === "judge"
 											? safeParseJson(evalRun.result, judgeEvalResultSchema)
 											: null;
+
 
 									return (
 										<div
