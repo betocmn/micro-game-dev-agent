@@ -42,3 +42,6 @@ next-env.d.ts
 
 # conductor workspace
 .context/
+
+# test artifacts
+test-game.html
