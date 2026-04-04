@@ -36,3 +36,4 @@ Micro agent pipeline MVP: user types a vague prompt ("space dodge rocks"), an LL
 - Run `pnpm test` before committing when behavior changes
 - Use semantic commit messages without parenthesis detail (e.g. `feat: add eval layer`)
 - Auto-commit after every change
+- Do NOT add Co-Authored-By or any co-author trailer to commits
