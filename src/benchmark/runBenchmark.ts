@@ -1,8 +1,11 @@
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import dataset from "@/evals/datasets/roblox-social-v1.json";
+import { ensureLocalEnvLoaded } from "@/lib/loadEnv";
 import type { RobloxEvalSuiteResult } from "@/types";
 import { generateRobloxRun } from "@/worker/harness";
+
+ensureLocalEnvLoaded();
 
 interface BenchmarkCaseResult {
 	id: string;

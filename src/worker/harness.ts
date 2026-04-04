@@ -6,6 +6,7 @@ import {
 	type SDKResultMessage,
 } from "@anthropic-ai/claude-agent-sdk";
 import { runRobloxEvals } from "@/evals/robloxRunEvals";
+import { ensureLocalEnvLoaded } from "@/lib/loadEnv";
 import { generateRunResponseSchema } from "@/lib/schemas";
 import type {
 	AgentEventSummary,
@@ -15,6 +16,10 @@ import type {
 	RobloxGameSpec,
 } from "@/types";
 import { ARTIFACT_TYPE, EVAL_PROFILE, HARNESS_VERSION } from "./constants";
+import {
+	deriveRobloxSpecFromPrompt,
+	materializeFallbackProject,
+} from "./fallback";
 import { robloxGameSpecJsonSchema } from "./jsonSchemas";
 import {
 	createRunWorkspace,
@@ -26,6 +31,9 @@ import {
 
 const SDK_MODEL = "claude-sonnet-4-5";
 const SDK_CLIENT_APP = "caracas-v4/0.1.0";
+const PLANNER_TIMEOUT_MS = 25000;
+const BUILDER_TIMEOUT_MS = 45000;
+const REPAIR_TIMEOUT_MS = 30000;
 
 type QueryFunction = typeof query;
 
@@ -35,26 +43,31 @@ interface QueryRunResult<TStructured = unknown> {
 	structuredOutput?: TStructured;
 }
 
+interface ClaudeQueryBehavior {
+	label: string;
+	timeoutMs: number;
+}
+
 const AGENTS: Record<string, AgentDefinition> = {
 	roblox_intent_planner: {
 		description: "Expands vague prompts into strict Roblox game specs.",
-		maxTurns: 4,
+		maxTurns: 8,
 		model: "sonnet",
 		prompt:
-			"You plan Roblox MVP specs for teen-friendly social experiences. Prefer a single strong social loop, light progression, and server-authoritative rules.",
+			"You plan Roblox MVP specs for teen-friendly social experiences. Prefer one strong social loop, light progression, and explicit server-authoritative rules. Finish decisively with the required structured output instead of iterating.",
 		tools: [],
 	},
 	rojo_builder: {
 		description: "Edits the allowed scaffold files to realize the Roblox spec.",
-		maxTurns: 8,
+		maxTurns: 12,
 		model: "sonnet",
 		prompt:
-			"You are editing a constrained Rojo scaffold. Only change the allowed Luau and GameSpec files. Keep the project compatible with social Roblox MVPs and maintain a clear server/client split.",
+			"You are editing a constrained Rojo scaffold. Only change the allowed Luau and GameSpec files. Keep the project compatible with social Roblox MVPs, maintain a clear server/client split, and complete the implementation within the allowed files without exploratory turns.",
 		tools: ["Read", "Edit", "Write", "Glob", "Grep", "LS"],
 	},
 	eval_repair: {
 		description: "Repairs scaffold files after eval failures.",
-		maxTurns: 4,
+		maxTurns: 6,
 		model: "sonnet",
 		prompt:
 			"You repair Roblox scaffold files after proxy eval failures. Make the minimum changes needed to fix the failing checks while preserving the requested fantasy and social loop.",
@@ -63,6 +76,7 @@ const AGENTS: Record<string, AgentDefinition> = {
 } as const;
 
 function ensureAnthropicApiKey(): string {
+	ensureLocalEnvLoaded();
 	const apiKey = process.env.ANTHROPIC_API_KEY;
 	if (!apiKey) {
 		throw new Error(
@@ -141,6 +155,35 @@ function getResultMessage(messages: SDKMessage[]): SDKResultMessage {
 	return result;
 }
 
+function getErrorMessage(error: unknown): string {
+	return error instanceof Error ? error.message : String(error);
+}
+
+function createFallbackEvent(
+	stage: "planner" | "builder" | "repair",
+	error: unknown,
+): AgentEventSummary {
+	return {
+		type: "fallback",
+		summary: `${stage} fallback used`,
+		payload: getErrorMessage(error),
+	};
+}
+
+function createFallbackAgentRun(
+	generationId: string,
+	stage: string,
+): AgentRunSummary {
+	return {
+		sessionId: `fallback-${generationId}`,
+		model: "fallback-template",
+		numTurns: 0,
+		totalCostUsd: 0,
+		stopReason: `fallback-${stage}`,
+		permissionDenials: [],
+	};
+}
+
 function pathViolatesPolicy(
 	rawInput: unknown,
 	workspaceDir: string,
@@ -157,10 +200,10 @@ function pathViolatesPolicy(
 			if (value.includes(".git")) {
 				return "Access to .git paths is blocked.";
 			}
-			if (
-				(value.startsWith("/") || value.includes("/")) &&
-				!value.startsWith(workspaceDir)
-			) {
+			if (value.includes("..")) {
+				return `Path traversal is blocked: ${value}`;
+			}
+			if (value.startsWith("/") && !value.startsWith(workspaceDir)) {
 				return `Path ${value} is outside the allowed workspace.`;
 			}
 		}
@@ -222,37 +265,148 @@ async function runClaudeQuery<TStructured>(
 	runQuery: QueryFunction,
 	prompt: string,
 	options: Parameters<QueryFunction>[0]["options"],
+	behavior: ClaudeQueryBehavior,
 ): Promise<QueryRunResult<TStructured>> {
 	const messages: SDKMessage[] = [];
 	const events: AgentEventSummary[] = [];
+	const abortController = new AbortController();
+	const queryRun = runQuery({
+		prompt,
+		options: {
+			...options,
+			abortController,
+		},
+	});
+	const timeout = setTimeout(() => {
+		abortController.abort(`${behavior.label} timed out`);
+	}, behavior.timeoutMs);
 
-	for await (const message of runQuery({ prompt, options })) {
-		messages.push(message);
-		const event = summarizeMessage(message);
-		if (event) {
-			events.push(event);
+	try {
+		for await (const message of queryRun) {
+			messages.push(message);
+			const event = summarizeMessage(message);
+			if (event) {
+				events.push(event);
+			}
+		}
+
+		const result = getResultMessage(messages);
+		if (result.subtype !== "success") {
+			throw new Error(
+				result.errors.join("; ") || `${behavior.label} did not succeed.`,
+			);
+		}
+
+		return {
+			agentRun: {
+				sessionId: result.session_id,
+				model: SDK_MODEL,
+				numTurns: result.num_turns,
+				totalCostUsd: result.total_cost_usd,
+				stopReason: result.stop_reason,
+				permissionDenials: result.permission_denials.map(
+					(denial) =>
+						`${denial.tool_name}: ${JSON.stringify(denial.tool_input)}`,
+				),
+			},
+			events,
+			structuredOutput: result.structured_output as TStructured | undefined,
+		};
+	} catch (error) {
+		if (abortController.signal.aborted) {
+			throw new Error(
+				`${behavior.label} timed out after ${behavior.timeoutMs}ms.`,
+			);
+		}
+		throw error;
+	} finally {
+		clearTimeout(timeout);
+		if (
+			abortController.signal.aborted &&
+			"close" in (queryRun as object) &&
+			typeof (queryRun as { close?: () => void }).close === "function"
+		) {
+			(queryRun as { close: () => void }).close();
+		}
+	}
+}
+
+function createPlannerPrompt(prompt: string) {
+	return [
+		"Expand this vague prompt into one strict Roblox MVP spec.",
+		"Prefer teen-friendly social hangouts, one clear social loop, visible progression, and acceptance tests that can be proxy-evaluated.",
+		"Return the structured result decisively without asking follow-up questions.",
+		`Prompt: ${prompt}`,
+	].join("\n\n");
+}
+
+function createBuilderPrompt(
+	prompt: string,
+	spec: RobloxGameSpec,
+	repairContext?: RobloxEvalSuiteResult,
+) {
+	if (repairContext) {
+		return [
+			"Repair the Roblox scaffold based on these failed evals.",
+			"Only touch src/server/Mechanic.server.luau, src/client/Mechanic.client.luau, and src/shared/GameSpec.json.",
+			`Eval failures:\n${JSON.stringify(repairContext, null, 2)}`,
+		].join("\n\n");
+	}
+
+	return [
+		"Materialize the Roblox project in the current workspace.",
+		"Only edit src/server/Mechanic.server.luau, src/client/Mechanic.client.luau, and src/shared/GameSpec.json.",
+		"Do not change fixed scaffold files.",
+		"Implement a working server/client split that reflects the social loop and progression hook.",
+		`Original prompt: ${prompt}`,
+		`Spec:\n${JSON.stringify(spec, null, 2)}`,
+	].join("\n\n");
+}
+
+function getPreferredAgentRun(
+	generationId: string,
+	runs: Array<{ agentRun: AgentRunSummary } | null | undefined>,
+	fallbackStage: string,
+): AgentRunSummary {
+	for (const run of runs) {
+		if (run) {
+			return run.agentRun;
 		}
 	}
 
-	const result = getResultMessage(messages);
-	if (result.subtype !== "success") {
-		throw new Error(result.errors.join("; "));
-	}
+	return createFallbackAgentRun(generationId, fallbackStage);
+}
 
-	return {
-		agentRun: {
-			sessionId: result.session_id,
-			model: SDK_MODEL,
-			numTurns: result.num_turns,
-			totalCostUsd: result.total_cost_usd,
-			stopReason: result.stop_reason,
-			permissionDenials: result.permission_denials.map(
-				(denial) => `${denial.tool_name}: ${JSON.stringify(denial.tool_input)}`,
-			),
-		},
-		events,
-		structuredOutput: result.structured_output as TStructured | undefined,
-	};
+function collectEvents(
+	...eventGroups: Array<AgentEventSummary[] | undefined>
+): AgentEventSummary[] {
+	return eventGroups.flatMap((group) => group ?? []);
+}
+
+async function buildFallbackProject(
+	workspaceDir: string,
+	spec: RobloxGameSpec,
+): Promise<void> {
+	await materializeFallbackProject(workspaceDir, spec);
+}
+
+async function evaluateBundle(
+	apiKey: string,
+	prompt: string,
+	spec: RobloxGameSpec,
+	workspaceDir: string,
+	expectedScaffoldChecksum: string,
+) {
+	const artifactBundle = await loadArtifactBundle(workspaceDir);
+	const evalSuite = await runRobloxEvals(
+		apiKey,
+		prompt,
+		spec,
+		artifactBundle,
+		expectedScaffoldChecksum,
+	);
+
+	return { artifactBundle, evalSuite };
 }
 
 async function planRobloxSpec(
@@ -263,11 +417,7 @@ async function planRobloxSpec(
 ): Promise<QueryRunResult<RobloxGameSpec>> {
 	return runClaudeQuery<RobloxGameSpec>(
 		runQuery,
-		[
-			"Expand this vague prompt into a Roblox MVP spec.",
-			"Bias toward social hangout mechanics, visible progression, and clear acceptance tests.",
-			`Prompt: ${prompt}`,
-		].join("\n\n"),
+		createPlannerPrompt(prompt),
 		{
 			agent: "roblox_intent_planner",
 			agents: AGENTS,
@@ -277,21 +427,20 @@ async function planRobloxSpec(
 				ANTHROPIC_API_KEY: apiKey,
 				CLAUDE_AGENT_SDK_CLIENT_APP: SDK_CLIENT_APP,
 			},
-			maxTurns: 4,
+			maxTurns: 6,
 			model: SDK_MODEL,
 			outputFormat: {
 				type: "json_schema",
 				schema: robloxGameSpecJsonSchema,
 			},
 			permissionMode: "plan",
-			settingSources: ["project"],
-			systemPrompt: {
-				type: "preset",
-				preset: "claude_code",
-				append:
-					"Treat this repository as a Roblox scaffold generator, not a browser game generator.",
-			},
+			systemPrompt:
+				"You turn vague Roblox prompts into concise structured specs for a fixed Rojo scaffold. Focus on social-hangout MVPs and finish with the required JSON output.",
 			tools: [],
+		},
+		{
+			label: "Planner",
+			timeoutMs: PLANNER_TIMEOUT_MS,
 		},
 	);
 }
@@ -305,44 +454,39 @@ async function materializeProject(
 	resume?: string,
 	repairContext?: RobloxEvalSuiteResult,
 ): Promise<QueryRunResult> {
-	const repairPrompt = repairContext
-		? [
-				"Repair the Roblox scaffold based on these failed evals.",
-				JSON.stringify(repairContext, null, 2),
-			].join("\n\n")
-		: [
-				"Materialize the Roblox project in the current workspace.",
-				"Only edit src/server/Mechanic.server.luau, src/client/Mechanic.client.luau, and src/shared/GameSpec.json.",
-				"Do not change fixed scaffold files.",
-				`Original prompt: ${prompt}`,
-				`Spec:\n${JSON.stringify(spec, null, 2)}`,
-			].join("\n\n");
-
-	return runClaudeQuery(runQuery, repairPrompt, {
-		agent: repairContext ? "eval_repair" : "rojo_builder",
-		agents: AGENTS,
-		cwd: workspaceDir,
-		disallowedTools: ["Bash", "WebFetch"],
-		enableFileCheckpointing: true,
-		env: {
-			...process.env,
-			ANTHROPIC_API_KEY: apiKey,
-			CLAUDE_AGENT_SDK_CLIENT_APP: SDK_CLIENT_APP,
+	return runClaudeQuery(
+		runQuery,
+		createBuilderPrompt(prompt, spec, repairContext),
+		{
+			agent: repairContext ? "eval_repair" : "rojo_builder",
+			agents: AGENTS,
+			cwd: workspaceDir,
+			disallowedTools: ["Bash", "WebFetch"],
+			enableFileCheckpointing: true,
+			env: {
+				...process.env,
+				ANTHROPIC_API_KEY: apiKey,
+				CLAUDE_AGENT_SDK_CLIENT_APP: SDK_CLIENT_APP,
+			},
+			hooks: createWorkspaceHooks(workspaceDir),
+			maxTurns: repairContext ? 8 : 14,
+			model: SDK_MODEL,
+			permissionMode: "acceptEdits",
+			resume,
+			settingSources: ["project"],
+			systemPrompt: {
+				type: "preset",
+				preset: "claude_code",
+				append:
+					"Treat this repository as a Roblox scaffold generator. Never touch .env, .git, or files outside the run workspace. Finish decisively inside the editable scaffold files.",
+			},
+			tools: ["Read", "Edit", "Write", "Glob", "Grep", "LS"],
 		},
-		hooks: createWorkspaceHooks(workspaceDir),
-		maxTurns: repairContext ? 4 : 8,
-		model: SDK_MODEL,
-		permissionMode: "acceptEdits",
-		resume,
-		settingSources: ["project"],
-		systemPrompt: {
-			type: "preset",
-			preset: "claude_code",
-			append:
-				"Never touch .env, .git, or files outside the run workspace. Stay inside the Roblox scaffold contract.",
+		{
+			label: repairContext ? "Repair" : "Builder",
+			timeoutMs: repairContext ? REPAIR_TIMEOUT_MS : BUILDER_TIMEOUT_MS,
 		},
-		tools: ["Read", "Edit", "Write", "Glob", "Grep", "LS"],
-	});
+	);
 }
 
 export async function generateRobloxRun(
@@ -360,61 +504,95 @@ export async function generateRobloxRun(
 	const { workspaceDir } = await createRunWorkspace(request.generationId);
 	const templateBundle = await getTemplateBundle();
 	const expectedScaffoldChecksum = getFixedScaffoldChecksum(templateBundle);
+	const fallbackEvents: AgentEventSummary[] = [];
 
-	const specRun = await planRobloxSpec(
-		apiKey,
-		request.prompt,
-		workspaceDir,
-		runQuery,
-	);
-	if (!specRun.structuredOutput) {
-		throw new Error("Planner returned no structured Roblox spec.");
-	}
+	let specRun: QueryRunResult<RobloxGameSpec> | null = null;
+	let spec = deriveRobloxSpecFromPrompt(request.prompt);
 
-	await writeSpecToWorkspace(workspaceDir, specRun.structuredOutput);
-
-	const buildRun = await materializeProject(
-		apiKey,
-		request.prompt,
-		specRun.structuredOutput,
-		workspaceDir,
-		runQuery,
-	);
-	let artifactBundle = await loadArtifactBundle(workspaceDir);
-	let evalSuite = await runRobloxEvals(
-		apiKey,
-		request.prompt,
-		specRun.structuredOutput,
-		artifactBundle,
-		expectedScaffoldChecksum,
-	);
-	let agentRun = buildRun.agentRun;
-	let events = [...specRun.events, ...buildRun.events];
-
-	if (!evalSuite.artifact.pass || !evalSuite.roblox.pass) {
-		const repairRun = await materializeProject(
+	try {
+		specRun = await planRobloxSpec(
 			apiKey,
 			request.prompt,
-			specRun.structuredOutput,
 			workspaceDir,
 			runQuery,
-			buildRun.agentRun.sessionId,
-			evalSuite,
 		);
-		artifactBundle = await loadArtifactBundle(workspaceDir);
-		evalSuite = await runRobloxEvals(
+		if (!specRun.structuredOutput) {
+			throw new Error("Planner returned no structured Roblox spec.");
+		}
+		spec = specRun.structuredOutput;
+	} catch (error) {
+		fallbackEvents.push(createFallbackEvent("planner", error));
+	}
+
+	await writeSpecToWorkspace(workspaceDir, spec);
+
+	let buildRun: QueryRunResult | null = null;
+	try {
+		buildRun = await materializeProject(
 			apiKey,
 			request.prompt,
-			specRun.structuredOutput,
-			artifactBundle,
-			expectedScaffoldChecksum,
+			spec,
+			workspaceDir,
+			runQuery,
 		);
-		agentRun = repairRun.agentRun;
-		events = [...events, ...repairRun.events];
+	} catch (error) {
+		fallbackEvents.push(createFallbackEvent("builder", error));
+		await buildFallbackProject(workspaceDir, spec);
+	}
+
+	let { artifactBundle, evalSuite } = await evaluateBundle(
+		apiKey,
+		request.prompt,
+		spec,
+		workspaceDir,
+		expectedScaffoldChecksum,
+	);
+	let agentRun = getPreferredAgentRun(
+		request.generationId,
+		[buildRun, specRun],
+		"builder",
+	);
+	let events = collectEvents(specRun?.events, buildRun?.events, fallbackEvents);
+
+	if (!evalSuite.artifact.pass || !evalSuite.roblox.pass) {
+		let repairRun: QueryRunResult | null = null;
+		try {
+			repairRun = await materializeProject(
+				apiKey,
+				request.prompt,
+				spec,
+				workspaceDir,
+				runQuery,
+				buildRun?.agentRun.sessionId,
+				evalSuite,
+			);
+		} catch (error) {
+			fallbackEvents.push(createFallbackEvent("repair", error));
+			await buildFallbackProject(workspaceDir, spec);
+		}
+
+		({ artifactBundle, evalSuite } = await evaluateBundle(
+			apiKey,
+			request.prompt,
+			spec,
+			workspaceDir,
+			expectedScaffoldChecksum,
+		));
+		agentRun = getPreferredAgentRun(
+			request.generationId,
+			[repairRun, buildRun, specRun],
+			"repair",
+		);
+		events = collectEvents(
+			specRun?.events,
+			buildRun?.events,
+			repairRun?.events,
+			fallbackEvents,
+		);
 	}
 
 	return generateRunResponseSchema.parse({
-		spec: specRun.structuredOutput,
+		spec,
 		artifactBundle: {
 			...artifactBundle,
 			artifactType: ARTIFACT_TYPE,

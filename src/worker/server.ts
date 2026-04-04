@@ -1,6 +1,7 @@
 import type { ServerResponse } from "node:http";
 import { createServer } from "node:http";
 import { runRobloxEvals } from "@/evals/robloxRunEvals";
+import { ensureLocalEnvLoaded } from "@/lib/loadEnv";
 import {
 	evaluateRunRequestSchema,
 	evaluateRunResponseSchema,
@@ -8,6 +9,8 @@ import {
 } from "@/lib/schemas";
 import { generateRobloxRun } from "./harness";
 import { getFixedScaffoldChecksum, getTemplateBundle } from "./workspace";
+
+ensureLocalEnvLoaded();
 
 const DEFAULT_PORT = 3200;
 
