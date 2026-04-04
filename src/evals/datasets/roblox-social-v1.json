@@ -1,0 +1,66 @@
+{
+	"harnessVersion": "claude-rojo-v1",
+	"evalProfile": "roblox-social-v1",
+	"cases": [
+		{
+			"id": "mall-hang",
+			"prompt": "mall hang vibes",
+			"focus": "social hangout with light progression"
+		},
+		{
+			"id": "late-night",
+			"prompt": "late night rooftop",
+			"focus": "ambient social-sim scene with shared emotes"
+		},
+		{
+			"id": "sleepover",
+			"prompt": "sleepover chaos energy",
+			"focus": "cozy social-sim with collectible room props"
+		},
+		{
+			"id": "campus-run",
+			"prompt": "campus flex rush",
+			"focus": "obby meets hangout with style unlocks"
+		},
+		{
+			"id": "beach-friends",
+			"prompt": "beach party forever",
+			"focus": "hangout loop with mini social quests"
+		},
+		{
+			"id": "cafe-story",
+			"prompt": "cute cafe drama",
+			"focus": "social-sim with roleplay stations"
+		},
+		{
+			"id": "arcade-squad",
+			"prompt": "arcade squad night",
+			"focus": "hangout hub with rotating minigames"
+		},
+		{
+			"id": "fashion-club",
+			"prompt": "fashion club lobby",
+			"focus": "social-sim with expression and light progression"
+		},
+		{
+			"id": "haunted-plaza",
+			"prompt": "haunted plaza gossip",
+			"focus": "social hangout with spooky discovery loop"
+		},
+		{
+			"id": "pet-corner",
+			"prompt": "tiny pet corner",
+			"focus": "social-sim with light caretaking progression"
+		},
+		{
+			"id": "music-lounge",
+			"prompt": "music lounge glow",
+			"focus": "hangout with collaborative music interactions"
+		},
+		{
+			"id": "sky-obby",
+			"prompt": "sky obby flex",
+			"focus": "obby shell with friend spectating and rewards"
+		}
+	]
+}

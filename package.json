@@ -3,7 +3,7 @@
 	"version": "0.1.0",
 	"private": true,
 	"scripts": {
-		"dev": "npx convex dev & next dev",
+		"dev": "pnpm worker:dev & npx convex dev & next dev",
 		"build": "next build",
 		"start": "next start",
 		"check": "pnpm lint && tsc --noEmit",
@@ -12,9 +12,12 @@
 		"test": "vitest run",
 		"test:watch": "vitest",
 		"test:pipeline": "tsx src/pipeline/testPipeline.ts",
-		"test:evals": "tsx src/evals/testEvals.ts"
+		"test:evals": "tsx src/evals/testEvals.ts",
+		"worker:dev": "tsx watch src/worker/server.ts",
+		"benchmark": "tsx src/benchmark/runBenchmark.ts"
 	},
 	"dependencies": {
+		"@anthropic-ai/claude-agent-sdk": "0.2.92",
 		"convex": "^1.34.1",
 		"next": "16.2.2",
 		"playwright": "^1.59.1",

@@ -1,0 +1,28 @@
+{
+	"title": "Starter Hangout",
+	"experienceType": "hangout",
+	"fantasy": "A cozy social plaza where friends can meet and show off progression.",
+	"coreLoop": "Players move through a hub, interact with landmarks, and trigger short social activities.",
+	"socialLoop": "Small shared prompts and hangout stations keep players near each other.",
+	"progressionHook": "Earn style tokens by trying activities with friends.",
+	"serverAuthoritativeRules": [
+		"The server owns rewards and activity state.",
+		"Shared interactions must be validated on the server."
+	],
+	"clientFeedback": [
+		"Show prompts near activity hotspots.",
+		"Celebrate rewards with lightweight UI feedback."
+	],
+	"worldObjects": [
+		{
+			"name": "Plaza Stage",
+			"purpose": "Shared social interaction point",
+			"placement": "center"
+		}
+	],
+	"acceptanceTests": [
+		"Players can identify the main hangout fantasy within 10 seconds.",
+		"At least one interaction clearly requires or encourages other players nearby.",
+		"Progression is visible but does not dominate the social loop."
+	]
+}

@@ -12,7 +12,6 @@ import { safeParseJson } from "@/lib/safeJson";
 import { gameSpecSchema } from "@/lib/schemas";
 import { api } from "../../convex/_generated/api";
 
-
 export default function Home() {
 	const [prompt, setPrompt] = useState("");
 	const generations = useQuery(api.generations.listGenerations);
