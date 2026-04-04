@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test:pipeline": "tsx src/pipeline/testPipeline.ts",
+    "test:evals": "tsx src/evals/testEvals.ts"
   },
   "dependencies": {
     "convex": "^1.34.1",
