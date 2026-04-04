@@ -14,7 +14,7 @@
  * a Fly worker machine. For the MVP, this script is the eval runner.
  */
 
-import { writeFileSync } from "fs";
+import { writeFileSync } from "node:fs";
 import { buildMechanic } from "../agents/buildMechanic";
 import { expandIntent } from "../agents/expandIntent";
 import { compileGame } from "../compile/compileGame";

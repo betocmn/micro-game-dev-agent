@@ -7,7 +7,7 @@
  * writing the output HTML to a file you can open in a browser.
  */
 
-import { writeFileSync } from "fs";
+import { writeFileSync } from "node:fs";
 import { buildMechanic } from "../agents/buildMechanic";
 import { expandIntent } from "../agents/expandIntent";
 import { compileGame } from "../compile/compileGame";
