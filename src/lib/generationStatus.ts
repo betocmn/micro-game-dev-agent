@@ -12,20 +12,20 @@ export const STATUS_COLORS: Record<GenerationStatus, string> = {
 
 export const STATUS_LABELS: Record<GenerationStatus, string> = {
 	queued: "Queued",
-	expanding: "Expanding intent...",
-	building: "Building mechanic...",
-	compiling: "Compiling game...",
-	evaluating: "Running evals...",
+	expanding: "Planning Roblox spec...",
+	building: "Authoring scaffold...",
+	compiling: "Preparing artifact...",
+	evaluating: "Running proxy evals...",
 	done: "Done",
 	failed: "Failed",
 };
 
 const FAILURE_STAGE_LABELS: Record<GenerationFailureStage, string> = {
 	setup: "setup",
-	expanding: "intent expansion",
-	building: "mechanic generation",
-	compiling: "game compilation",
-	evaluating: "eval worker",
+	expanding: "spec planning",
+	building: "scaffold authoring",
+	compiling: "artifact preparation",
+	evaluating: "proxy eval worker",
 };
 
 export function formatFailureStage(

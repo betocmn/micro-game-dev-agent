@@ -9,7 +9,7 @@ import {
 	STATUS_LABELS,
 } from "@/lib/generationStatus";
 import { safeParseJson } from "@/lib/safeJson";
-import { gameSpecSchema } from "@/lib/schemas";
+import { artifactBundleSchema, robloxGameSpecSchema } from "@/lib/schemas";
 import { api } from "../../convex/_generated/api";
 
 export default function Home() {
@@ -25,12 +25,18 @@ export default function Home() {
 	};
 
 	return (
-		<div className="min-h-screen p-8 max-w-4xl mx-auto">
-			<div className="mb-8">
-				<h1 className="text-3xl font-bold mb-2">3 Words to Game</h1>
+		<div className="min-h-screen p-8 max-w-5xl mx-auto">
+			<div className="mb-8 space-y-3">
+				<div className="inline-flex items-center rounded-full border border-sky-800 bg-sky-950 px-3 py-1 text-xs uppercase tracking-[0.2em] text-sky-300">
+					Anthropic-native Roblox harness
+				</div>
+				<h1 className="text-4xl font-bold text-white">
+					Vague prompt to Rojo scaffold
+				</h1>
 				<p className="text-gray-400">
-					Type a vague prompt. An agent chain interprets your intent, generates
-					a playable HTML5 canvas game, and evals score it automatically.
+					Type a vague teen-style prompt. The worker expands intent into a
+					Roblox-ready project bundle, stores the artifact in Convex, and scores
+					it with proxy evals.
 				</p>
 			</div>
 
@@ -40,7 +46,7 @@ export default function Home() {
 						type="text"
 						value={prompt}
 						onChange={(e) => setPrompt(e.target.value)}
-						placeholder='Try "space dodge rocks" or "collect coins forest"'
+						placeholder='Try "mall hang vibes" or "cute cafe drama"'
 						className="flex-1 px-4 py-3 bg-gray-900 border border-gray-700 rounded-lg
                        text-white placeholder-gray-500 focus:outline-none focus:border-blue-500
                        focus:ring-1 focus:ring-blue-500"
@@ -70,18 +76,22 @@ export default function Home() {
 				)}
 
 				{generations?.map((generation) => {
-					const spec = safeParseJson(generation.spec, gameSpecSchema);
+					const spec = safeParseJson(generation.spec, robloxGameSpecSchema);
+					const artifactBundle = safeParseJson(
+						generation.artifactBundle,
+						artifactBundleSchema,
+					);
 					const failureStage = formatFailureStage(generation.failureStage);
 
 					return (
 						<Link
 							key={generation._id}
 							href={`/g/${generation._id}`}
-							className="block p-4 bg-gray-900 border border-gray-800 rounded-lg
+							className="block p-5 bg-gray-900 border border-gray-800 rounded-2xl
                          hover:border-gray-600 transition-colors"
 						>
-							<div className="flex items-center justify-between mb-2">
-								<span className="text-lg font-medium">
+							<div className="flex items-center justify-between gap-4 mb-3">
+								<span className="text-lg font-medium text-white">
 									&ldquo;{generation.prompt}&rdquo;
 								</span>
 								<span
@@ -92,34 +102,50 @@ export default function Home() {
 							</div>
 
 							{spec && (
-								<div className="text-sm text-gray-400">
-									<span className="text-gray-300">{spec.title}</span>
-									{" — "}
-									{spec.genre} &middot; {spec.coreLoop}
+								<div className="space-y-2 text-sm text-gray-400">
+									<div>
+										<span className="text-gray-200">{spec.title}</span>
+										{" — "}
+										{spec.experienceType} &middot; {spec.socialLoop}
+									</div>
+									<div className="flex flex-wrap gap-2 text-xs">
+										<span className="rounded-full bg-gray-800 px-2 py-1 text-gray-300">
+											{artifactBundle?.files.length ?? 0} files
+										</span>
+										{generation.harnessVersion && (
+											<span className="rounded-full bg-gray-800 px-2 py-1 text-gray-300">
+												{generation.harnessVersion}
+											</span>
+										)}
+										{generation.evalProfile && (
+											<span className="rounded-full bg-gray-800 px-2 py-1 text-gray-300">
+												{generation.evalProfile}
+											</span>
+										)}
+									</div>
 								</div>
 							)}
 
 							{generation.status === "done" &&
 								generation.summaryScore !== undefined && (
-									<div className="mt-2 flex gap-4 text-xs">
+									<div className="mt-3 flex flex-wrap gap-4 text-xs">
 										<span
 											className={
-												generation.runtimePass
+												generation.artifactPass
 													? "text-green-400"
 													: "text-red-400"
 											}
 										>
-											Runtime: {generation.runtimePass ? "PASS" : "FAIL"}
+											Artifact: {generation.artifactPass ? "PASS" : "FAIL"}
 										</span>
 										<span
 											className={
-												generation.interactionPass
+												generation.robloxPass
 													? "text-green-400"
 													: "text-red-400"
 											}
 										>
-											Interaction:{" "}
-											{generation.interactionPass ? "PASS" : "FAIL"}
+											Roblox: {generation.robloxPass ? "PASS" : "FAIL"}
 										</span>
 										{generation.judgeScore !== undefined && (
 											<span className="text-blue-400">
