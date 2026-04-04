@@ -1,138 +1,120 @@
-# 3 Words to Game
+# Roblox Harness MVP
 
-Type a vague 3-word prompt like **"space dodge rocks"** and the app expands intent, generates mechanic code, compiles a playable HTML5 canvas game, and runs automated evals that score the result.
+This repo is now an Anthropic-native agent harness MVP for vague Roblox prompts.
 
-Built with Next.js, Convex, OpenRouter, and Playwright.
+Type a prompt like `mall hang vibes` and the system:
+- expands intent into a strict `RobloxGameSpec`
+- materializes a constrained Rojo + Luau scaffold
+- persists the artifact bundle, agent trace, and evals in Convex
+- renders the files and scores in the Next.js UI
+
+The old HTML5 canvas pipeline remains in the repo as legacy reference only. It is no longer the live path.
 
 ## Stack
 
 | Layer | Tech |
 |-------|------|
-| Frontend | Next.js 16 App Router + Tailwind |
-| Realtime backend | Convex mutations, queries, and actions |
-| LLM | OpenRouter using `anthropic/claude-sonnet-4` |
-| Evals | Playwright runtime and interaction evals + LLM judge |
-| Validation | Zod |
-| Linting | Biome |
+| Frontend | Next.js 16 App Router |
+| State and orchestration | Convex |
+| Agent runtime | `@anthropic-ai/claude-agent-sdk` |
+| Artifact target | Rojo-style Roblox scaffold + Luau |
+| Evals | Proxy artifact eval + proxy Roblox eval + Claude judge |
 
-## Architecture
+## Live flow
 
-- `Convex` owns generation state, persistence, and orchestration.
-- `Next.js` renders the realtime UI and exposes a Node route handler at `src/app/api/evals/run/route.ts`.
-- `Playwright` runs inside that browser-capable worker path, not inside Convex actions.
-- `Convex` calls the worker after compile, then writes eval results back with `saveEvalResult()` and summary fields on the generation row.
+1. `enqueueGeneration()` inserts a generation row in Convex.
+2. Convex calls the local worker at `POST /runs/generate`.
+3. The worker creates `.context/runs/<generationId>/workspace` from the fixed scaffold.
+4. Claude Agent SDK plans a `RobloxGameSpec`, edits the allowed files, and records session metadata.
+5. Proxy evals score scaffold correctness and Roblox/social-fit heuristics.
+6. Convex persists the artifact bundle, agent run, agent events, and eval rows.
+7. The UI shows the file tree, trace summary, and benchmark score.
 
-This current route-handler worker is the demo path. The next production step is a dedicated Fly or Docker worker queue that reads jobs from Convex and writes results back.
+## Fixed scaffold
 
-## Prerequisites
+The live harness always starts from these files:
 
-- Node.js 20.9+
-- [pnpm](https://pnpm.io/) (`corepack enable && corepack prepare pnpm@latest --activate`)
-- A [Convex](https://www.convex.dev/) account
-- An [OpenRouter](https://openrouter.ai/) API key
+- `src/worker/template/default.project.json`
+- `src/worker/template/src/server/Mechanic.server.luau`
+- `src/worker/template/src/client/Mechanic.client.luau`
+- `src/worker/template/src/shared/GameSpec.json`
+- `src/worker/template/src/shared/MechanicContract.luau`
+- `src/worker/template/README.generated.md`
 
-## Setup
+Only these files are editable by the authoring agent:
 
-1. **Clone and install dependencies**
+- `src/server/Mechanic.server.luau`
+- `src/client/Mechanic.client.luau`
+- `src/shared/GameSpec.json`
 
-   ```bash
-   git clone <repo-url> && cd surat-v2
-   pnpm install
-   ```
+## Environment
 
-2. **Install Playwright browsers**
+Required:
 
-   ```bash
-   pnpm exec playwright install
-   ```
+- `NEXT_PUBLIC_CONVEX_URL`
+- `ANTHROPIC_API_KEY`
 
-3. **Configure local environment**
+Optional:
 
-   ```bash
-   cp .env.local.example .env.local
-   ```
+- `HARNESS_WORKER_URL`
+  Local default is `http://127.0.0.1:3200`.
 
-   Fill in:
-   - `NEXT_PUBLIC_CONVEX_URL`
-   - `OPENROUTER_API_KEY`
-   - `EVAL_RUNNER_URL` only if you are not using the default local worker route
+Copy the example file:
 
-   Local development defaults `EVAL_RUNNER_URL` to `http://127.0.0.1:3000/api/evals/run`.
+```bash
+cp .env.local.example .env.local
+```
 
-4. **Configure Convex env for actions**
+## Local development
 
-   The Convex action also needs `OPENROUTER_API_KEY`. For hosted deployments it also needs `EVAL_RUNNER_URL`.
+Install dependencies:
 
-   ```bash
-   pnpm convex env set OPENROUTER_API_KEY <your-key>
-   pnpm convex env set EVAL_RUNNER_URL https://your-worker-host/api/evals/run
-   ```
+```bash
+pnpm install
+```
 
-5. **Start local development**
+Start the app, Convex, and the worker together:
 
-   ```bash
-   pnpm dev
-   ```
+```bash
+pnpm dev
+```
 
-   `pnpm dev` starts both `convex dev` and `next dev` for the demo flow.
+This starts:
 
-6. Open [http://localhost:3000](http://localhost:3000), submit a prompt, and wait for the generation to move through `expanding`, `building`, `compiling`, and `evaluating`.
+- Next.js on `http://localhost:3000`
+- Convex dev
+- the harness worker on `http://127.0.0.1:3200`
 
 ## Scripts
 
 | Command | Description |
 |---------|-------------|
-| `pnpm dev` | Start local Convex + Next.js dev servers |
-| `pnpm build` | Production build |
-| `pnpm lint` | Run Biome checks |
-| `pnpm lint:fix` | Auto-fix Biome issues |
+| `pnpm dev` | Start Next.js, Convex, and the local harness worker |
+| `pnpm worker:dev` | Run only the local harness worker |
+| `pnpm check` | Run lint + typecheck |
 | `pnpm test` | Run Vitest |
-| `pnpm test:pipeline` | Run the standalone generation pipeline |
-| `pnpm test:evals` | Run the standalone pipeline plus eval suite |
+| `pnpm benchmark` | Run the `roblox-social-v1` dataset and write a report into `.context/benchmarks/` |
 
-## Live Flow
+## Benchmarking
 
-1. `enqueueGeneration()` inserts a generation row with status `queued`.
-2. `runPipeline()` advances through `expanding`, `building`, and `compiling` using the shared pipeline modules in `src/`.
-3. Convex sets the generation to `evaluating` and calls the eval worker.
-4. The worker runs runtime, interaction, and judge evals.
-5. Convex persists each eval via `saveEvalResult()` and writes summary fields back onto the generation row.
-6. The home page and detail page update automatically through Convex subscriptions.
+The curated dataset lives at:
 
-## Worker Boundary
+- `src/evals/datasets/roblox-social-v1.json`
 
-Playwright needs a browser-capable runtime, so it should not live inside Convex cloud actions.
-
-Current demo path:
-- `Convex action` orchestrates the job
-- `Next.js route handler` runs Playwright and returns eval results
-- `Convex mutation` stores the outputs
-
-Recommended production path:
-- `Convex` remains the source of truth for generation and eval job state
-- `Fly` or `Docker` worker runs Playwright jobs
-- worker writes results back into Convex
-
-## Deployment
-
-### Convex
-
-Deploy the Convex backend separately:
+Running:
 
 ```bash
-pnpm convex deploy
+pnpm benchmark
 ```
 
-Set these env vars on the deployment:
-- `OPENROUTER_API_KEY`
-- `EVAL_RUNNER_URL`
+will:
 
-### Next.js
+1. execute the harness on all 12 dataset cases
+2. write a timestamped JSON report into `.context/benchmarks/`
+3. compare the new average score with the most recent benchmark for the same eval profile
 
-Deploy the Next.js app wherever you want to host the UI and, for the demo setup, the eval worker route.
+## Notes
 
-Required app env vars:
-- `NEXT_PUBLIC_CONVEX_URL`
-- `OPENROUTER_API_KEY`
-
-If you keep using the route-handler worker in a deployed demo, point Convex's `EVAL_RUNNER_URL` at that public route URL.
+- The live artifact is a Roblox scaffold, not a playable browser game.
+- Evals are proxy checks; there is no Roblox Studio automation in this MVP.
+- The worker is the deployment boundary that can later move to Fly or Docker.
