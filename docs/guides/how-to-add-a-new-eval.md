@@ -1,170 +1,136 @@
 # How To Add A New Eval
 
-This repo already has three evals:
+The live eval harness scores Roblox scaffold artifacts, not browser games.
 
-- `runtime` in `src/evals/runtimeEval.ts`
-- `interaction` in `src/evals/interactionEval.ts`
-- `judge` in `src/evals/judgeEval.ts`
+Current evals:
 
-Adding a fourth eval is straightforward, but it touches more than one place because the system is strongly typed end to end.
+- `artifact` in `src/evals/artifactEval.ts`
+- `roblox` in `src/evals/robloxEval.ts`
+- `judge` in `src/evals/robloxJudgeEval.ts`
 
-## The current eval path
+The orchestration entry point is `runRobloxEvals()` in `src/evals/robloxRunEvals.ts`.
+
+## Current eval path
 
 ```text
-compiled HTML
-  -> runEvalWorker()
-  -> POST /api/evals/run
-  -> runAllEvals()
+ArtifactBundle + RobloxGameSpec
+  -> runRobloxEvals()
   -> your eval function
   -> typed result object
   -> Convex saveEvalResult()
   -> detail page renders evalRuns
-  -> optional summary fields copied onto generation row
 ```
-
-## Rule zero
-
-If the eval needs Playwright or any other browser-capable runtime, keep it in the worker path under `src/evals/` and `src/app/api/evals/run/route.ts`.
-
-Do not move browser execution into Convex actions.
 
 ## Step 1: Define the result shape
 
-Add a new result type in `src/types.ts`.
+Add a result type in `src/types.ts`.
 
 Example:
 
 ```ts
-export interface BalanceEvalResult {
+export interface EconomyEvalResult {
   pass: boolean;
-  difficultyScore: number;
+  inflationRisk: number;
   notes: string[];
 }
 ```
 
-If the new eval should be part of the top-level suite result, extend `EvalSuiteResult` too.
+If the eval belongs in the top-level suite, extend `RobloxEvalSuiteResult` too.
 
 ## Step 2: Add the Zod schema
 
-Add a matching schema in `src/lib/schemas.ts`.
+Add the matching schema in `src/lib/schemas.ts`.
 
 Example:
 
 ```ts
-export const balanceEvalResultSchema: z.ZodType<BalanceEvalResult> = z.object({
+export const economyEvalResultSchema: z.ZodType<EconomyEvalResult> = z.object({
   pass: z.boolean(),
-  difficultyScore: z.number().min(0).max(100),
+  inflationRisk: z.number().min(0).max(100),
   notes: z.array(z.string()),
 });
 ```
 
-Then add it to `evalSuiteResultSchema` if `runAllEvals()` will return it.
+This matters because:
 
-This step matters because:
-
-- the worker route validates outgoing responses
-- the worker client validates incoming responses
-- the UI parses stored JSON with these schemas
+- worker requests and responses are validated
+- stored JSON is parsed back into typed UI state
+- regressions become obvious instead of silent
 
 ## Step 3: Implement the eval
 
-Create a new file in `src/evals/`.
+Create a new file under `src/evals/`.
 
-Typical shapes:
-
-- browser-based check: mirror `runtimeEval.ts` or `interactionEval.ts`
-- model-based judge: mirror `judgeEval.ts`
-- pure TypeScript post-processing: accept already-produced artifacts and score them without Playwright
-
-Recommended signature pattern:
-
-```ts
-export async function runBalanceEval(
-  html: string,
-): Promise<BalanceEvalResult> {
-  // ...
-}
-```
-
-If the eval needs more context, pass only what it actually uses:
+Prefer the narrowest possible input:
 
 - `prompt`
 - `spec`
-- `mechanicCode`
-- `html`
+- `artifactBundle`
 - earlier eval results
 
-## Step 4: Wire it into `runAllEvals`
+Do not require more context than the scorer actually uses.
 
-Edit `src/evals/runEvals.ts`.
+## Step 4: Decide whether it is a hard gate or a soft score
 
-You need to decide:
+Answer these before wiring anything:
 
-1. When should the eval run?
-2. Should runtime failure skip it?
-3. Does it affect `summaryScore`?
-4. Is it binary like `runtime`, or graded like `judge`?
+- Does this eval gate pass/fail?
+- Does it only add diagnostic signal?
+- Should it run before or after the existing `roblox` eval?
+- Does it change `summaryScore`?
 
-Current behavior:
+Right now the suite is weighted `30 / 30 / 40` for `artifact / roblox / judge`. If your new eval changes the weighting, normalize the total back to `100`.
 
-- `runtime` runs first
-- if `runtime.pass === false`, the suite hard-fails and later evals are skipped
-- `interaction` and `judge` run only after runtime passes
-- summary score is `35 + 35 + 30` weighted
+## Step 5: Wire it into `runRobloxEvals()`
 
-If your new eval affects the score, update the math and keep the total normalized to `100`.
+Edit `src/evals/robloxRunEvals.ts`.
 
-## Step 5: Persist the new eval in Convex
+Decide:
 
-Edit `convex/generations.ts`.
+- the execution order
+- whether earlier failures should skip it
+- how its score contributes to the summary
+
+If the new eval calls Anthropic, add a deterministic fallback or a clearly defined failure policy. The current harness is designed to finish the run whenever possible.
+
+## Step 6: Persist it in Convex
+
+Edit:
+
+- `convex/generations.ts`
+- `convex/schema.ts`
 
 At minimum:
 
-1. Extend `evalTypeValidator`.
-2. Call `saveEvalResult()` for the new eval after the worker returns.
+- extend the eval type validator
+- insert a row in `evalRuns`
+- decide whether the generation summary row should copy any headline values
 
-Example shape:
+## Step 7: Render it in the UI
 
-```ts
-await ctx.runMutation(internal.generations.saveEvalResult, {
-  generationId,
-  type: "balance",
-  status: "done",
-  result: JSON.stringify(evalResult.balance),
-});
-```
+The detail page branches on `evalRun.type` in `src/app/g/[id]/page.tsx`.
 
-If the eval should influence the generation summary row, also update:
+To surface the new eval:
 
-- `updateGeneration` args
-- the `generations` table in `convex/schema.ts`
-- any summary calculations you want to surface on the home page
+- import the schema
+- parse `evalRun.result`
+- render a dedicated block
 
-## Step 6: Render it in the UI
+If the eval changes headline scoring, update `src/app/page.tsx` too.
 
-The detail page currently parses eval results by `evalRun.type` in `src/app/g/[id]/page.tsx`.
-
-To display the new eval cleanly:
-
-1. Import the new Zod schema.
-2. Parse `evalRun.result` when `evalRun.type` matches your new type.
-3. Render a dedicated block for that result.
-
-If the eval changes headline scoring, also update `src/app/page.tsx` and any summary labels.
-
-## Step 7: Add tests
+## Step 8: Add tests
 
 The minimum useful coverage is:
 
-1. A focused test for the new eval module.
-2. A `runEvals.test.ts` update that proves orchestration and scoring still work.
-3. Schema coverage if the result shape is easy to regress.
+- a focused unit test for the new eval module
+- an orchestration test for `runRobloxEvals()`
+- any schema validation coverage that is easy to regress
 
-Useful existing references:
+Useful references:
 
-- `src/evals/runEvals.test.ts`
-- `src/evals/evalWorkerClient.test.ts`
-- `src/compile/compileGame.test.ts`
+- `src/evals/artifactEval.test.ts`
+- `src/evals/robloxEval.test.ts`
+- `src/worker/harness.test.ts`
 
 ## File checklist
 
@@ -174,71 +140,15 @@ For most new evals, expect to touch:
 src/types.ts
 src/lib/schemas.ts
 src/evals/<newEval>.ts
-src/evals/runEvals.ts
-src/evals/runEvals.test.ts
+src/evals/robloxRunEvals.ts
 convex/generations.ts
 convex/schema.ts
 src/app/g/[id]/page.tsx
-src/app/page.tsx            # only if summary UX changes
+src/app/page.tsx
 ```
 
-## Decision points before you start
+## Rule of thumb
 
-Answer these first:
+If the new eval can be implemented as pure TypeScript over the artifact bundle, do that first.
 
-```text
-What artifact am I judging?
-What signal proves pass/fail?
-Is the eval cheap enough to run every time?
-Is it a hard gate, a soft score, or debug-only telemetry?
-Should it run before or after existing evals?
-What should happen when runtime fails?
-```
-
-If those answers are vague, the implementation will drift.
-
-## Practical patterns
-
-### For browser behavior
-
-Reuse the existing harness pattern:
-
-- `page.setContent(html)`
-- wait for `window.__gameEval.ready`
-- sample `window.__gameEval.snapshot()`
-- collect `pageerror` and console signals
-
-### For spec-matching
-
-Pass the original intent and prior eval outputs into the scorer, the same way `judgeEval.ts` does.
-
-### For metrics-based evals
-
-Prefer extending `window.__gameEval.metrics` in `src/compile/engineShell.ts` and consuming those values from Playwright instead of trying to infer behavior from pixels.
-
-## Current limitations to keep in mind
-
-The current implementation is simple, so new evals inherit some rough edges:
-
-- eval rows are only persisted as `done` right now, not as a full per-eval lifecycle
-- the worker returns the whole suite at once rather than streaming partial results
-- summary fields on the `generations` row are custom, not generic
-- the detail page has explicit branches per eval type instead of a registry
-
-That is fine for the current scope. Just be aware that adding many more evals will eventually justify a registry-driven design.
-
-## Suggested future refactor
-
-Once there are more than a few evals, move toward:
-
-```text
-eval registry
-  -> id
-  -> runner
-  -> schema
-  -> persistence strategy
-  -> summary contribution
-  -> UI renderer
-```
-
-Right now the code is explicit rather than generic. That keeps it easy to follow while the eval set is still small.
+Only reach for another Anthropic call when the signal is genuinely semantic and cannot be captured by deterministic checks.

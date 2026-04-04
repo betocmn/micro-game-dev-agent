@@ -118,3 +118,11 @@ will:
 - The live artifact is a Roblox scaffold, not a playable browser game.
 - Evals are proxy checks; there is no Roblox Studio automation in this MVP.
 - The worker is the deployment boundary that can later move to Fly or Docker.
+- The worker prefers Claude Agent SDK authoring, but it now falls back to deterministic scaffold generation when planner or builder steps time out. Those recoveries are surfaced in the returned `events`.
+
+## Guides
+
+- `docs/guides/agent-harness.md`
+- `docs/guides/architecture.md`
+- `docs/guides/running-the-worker.md`
+- `docs/guides/how-to-add-a-new-eval.md`

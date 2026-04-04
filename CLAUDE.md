@@ -21,4 +21,5 @@ Anthropic-native Roblox scaffold generator:
 - Use `ANTHROPIC_API_KEY`, not `OPENROUTER_API_KEY`
 - The live path is the worker-based Roblox scaffold flow, not the legacy canvas flow
 - Keep the fixed scaffold contract stable
+- The harness prefers Claude authoring, but deterministic fallback generation is a valid live path and should remain observable in `events`
 - Auto-commit after each change with semantic commit messages and no parenthetical detail
