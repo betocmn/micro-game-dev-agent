@@ -1,6 +1,6 @@
 # 3 Words to Game
 
-Type a vague 3-word prompt like **"space dodge rocks"** and an AI agent pipeline expands intent, generates game mechanic code, compiles a playable HTML5 canvas game, and runs 3 automated evals to score it.
+Type a vague 3-word prompt like **"space dodge rocks"** and the app expands intent, generates mechanic code, compiles a playable HTML5 canvas game, and runs automated evals that score the result.
 
 Built with Next.js, Convex, OpenRouter, and Playwright.
 
@@ -8,17 +8,27 @@ Built with Next.js, Convex, OpenRouter, and Playwright.
 
 | Layer | Tech |
 |-------|------|
-| Frontend | Next.js (App Router) + Tailwind |
-| Backend | Convex (reactive DB, mutations/queries/actions) |
-| LLM | OpenRouter (`anthropic/claude-sonnet-4`) |
-| Evals | Playwright (runtime + interaction) and LLM-as-judge |
+| Frontend | Next.js 16 App Router + Tailwind |
+| Realtime backend | Convex mutations, queries, and actions |
+| LLM | OpenRouter using `anthropic/claude-sonnet-4` |
+| Evals | Playwright runtime and interaction evals + LLM judge |
+| Validation | Zod |
 | Linting | Biome |
+
+## Architecture
+
+- `Convex` owns generation state, persistence, and orchestration.
+- `Next.js` renders the realtime UI and exposes a Node route handler at `src/app/api/evals/run/route.ts`.
+- `Playwright` runs inside that browser-capable worker path, not inside Convex actions.
+- `Convex` calls the worker after compile, then writes eval results back with `saveEvalResult()` and summary fields on the generation row.
+
+This current route-handler worker is the demo path. The next production step is a dedicated Fly or Docker worker queue that reads jobs from Convex and writes results back.
 
 ## Prerequisites
 
-- Node.js 20+
+- Node.js 20.9+
 - [pnpm](https://pnpm.io/) (`corepack enable && corepack prepare pnpm@latest --activate`)
-- A [Convex](https://www.convex.dev/) account (free tier works)
+- A [Convex](https://www.convex.dev/) account
 - An [OpenRouter](https://openrouter.ai/) API key
 
 ## Setup
@@ -30,73 +40,99 @@ Built with Next.js, Convex, OpenRouter, and Playwright.
    pnpm install
    ```
 
-2. **Configure environment variables**
+2. **Install Playwright browsers**
+
+   ```bash
+   pnpm exec playwright install
+   ```
+
+3. **Configure local environment**
 
    ```bash
    cp .env.local.example .env.local
    ```
 
-   Fill in your `NEXT_PUBLIC_CONVEX_URL` and `OPENROUTER_API_KEY`.
+   Fill in:
+   - `NEXT_PUBLIC_CONVEX_URL`
+   - `OPENROUTER_API_KEY`
+   - `EVAL_RUNNER_URL` only if you are not using the default local worker route
 
-   Also set the OpenRouter key in the Convex dashboard (or via `pnpm convex env set OPENROUTER_API_KEY <key>`).
+   Local development defaults `EVAL_RUNNER_URL` to `http://127.0.0.1:3000/api/evals/run`.
 
-3. **Start the Convex dev server** (in one terminal)
+4. **Configure Convex env for actions**
+
+   The Convex action also needs `OPENROUTER_API_KEY`. For hosted deployments it also needs `EVAL_RUNNER_URL`.
 
    ```bash
-   pnpm convex dev
+   pnpm convex env set OPENROUTER_API_KEY <your-key>
+   pnpm convex env set EVAL_RUNNER_URL https://your-worker-host/api/evals/run
    ```
 
-4. **Start the Next.js dev server** (in another terminal)
+5. **Start local development**
 
    ```bash
    pnpm dev
    ```
 
-5. Open [http://localhost:3000](http://localhost:3000) and type a prompt.
+   `pnpm dev` starts both `convex dev` and `next dev` for the demo flow.
+
+6. Open [http://localhost:3000](http://localhost:3000), submit a prompt, and wait for the generation to move through `expanding`, `building`, `compiling`, and `evaluating`.
 
 ## Scripts
 
 | Command | Description |
 |---------|-------------|
-| `pnpm dev` | Start Next.js dev server |
-| `pnpm convex dev` | Start Convex dev server |
+| `pnpm dev` | Start local Convex + Next.js dev servers |
 | `pnpm build` | Production build |
-| `pnpm lint` | Run Biome lint |
-| `pnpm lint:fix` | Auto-fix lint issues |
-| `pnpm test:pipeline` | Test generation pipeline (standalone) |
-| `pnpm test:evals` | Run full pipeline + evals |
+| `pnpm lint` | Run Biome checks |
+| `pnpm lint:fix` | Auto-fix Biome issues |
+| `pnpm test` | Run Vitest |
+| `pnpm test:pipeline` | Run the standalone generation pipeline |
+| `pnpm test:evals` | Run the standalone pipeline plus eval suite |
+
+## Live Flow
+
+1. `enqueueGeneration()` inserts a generation row with status `queued`.
+2. `runPipeline()` advances through `expanding`, `building`, and `compiling` using the shared pipeline modules in `src/`.
+3. Convex sets the generation to `evaluating` and calls the eval worker.
+4. The worker runs runtime, interaction, and judge evals.
+5. Convex persists each eval via `saveEvalResult()` and writes summary fields back onto the generation row.
+6. The home page and detail page update automatically through Convex subscriptions.
+
+## Worker Boundary
+
+Playwright needs a browser-capable runtime, so it should not live inside Convex cloud actions.
+
+Current demo path:
+- `Convex action` orchestrates the job
+- `Next.js route handler` runs Playwright and returns eval results
+- `Convex mutation` stores the outputs
+
+Recommended production path:
+- `Convex` remains the source of truth for generation and eval job state
+- `Fly` or `Docker` worker runs Playwright jobs
+- worker writes results back into Convex
 
 ## Deployment
 
 ### Convex
 
-Convex functions are deployed separately:
+Deploy the Convex backend separately:
 
 ```bash
 pnpm convex deploy
 ```
 
-This pushes your `convex/` directory to Convex cloud. Set production env vars in the [Convex dashboard](https://dashboard.convex.dev/).
+Set these env vars on the deployment:
+- `OPENROUTER_API_KEY`
+- `EVAL_RUNNER_URL`
 
-### Next.js on Fly.io
+### Next.js
 
-1. Install the [Fly CLI](https://fly.io/docs/flyctl/install/)
-2. Launch the app:
+Deploy the Next.js app wherever you want to host the UI and, for the demo setup, the eval worker route.
 
-   ```bash
-   fly launch
-   ```
+Required app env vars:
+- `NEXT_PUBLIC_CONVEX_URL`
+- `OPENROUTER_API_KEY`
 
-3. Set environment variables:
-
-   ```bash
-   fly secrets set NEXT_PUBLIC_CONVEX_URL=<your-convex-prod-url>
-   ```
-
-4. Deploy:
-
-   ```bash
-   fly deploy
-   ```
-
-The app runs as a standard Next.js server on Fly.io. Make sure `NEXT_PUBLIC_CONVEX_URL` points to your production Convex deployment.
+If you keep using the route-handler worker in a deployed demo, point Convex's `EVAL_RUNNER_URL` at that public route URL.
