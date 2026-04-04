@@ -13,49 +13,60 @@
  */
 
 import { v } from "convex/values";
-import { mutation, query, internalMutation, internalAction, internalQuery } from "./_generated/server";
 import { internal } from "./_generated/api";
+import {
+	internalAction,
+	internalMutation,
+	internalQuery,
+	mutation,
+	query,
+} from "./_generated/server";
 
 // === LLM HELPER (duplicated from src/lib/openrouter.ts for Convex runtime) ===
 
 async function chatCompletion(
-  apiKey: string,
-  messages: Array<{ role: string; content: string }>,
-  options: { temperature?: number; maxTokens?: number } = {}
+	apiKey: string,
+	messages: Array<{ role: string; content: string }>,
+	options: { temperature?: number; maxTokens?: number } = {},
 ): Promise<string> {
-  const { temperature = 0.7, maxTokens = 4096 } = options;
+	const { temperature = 0.7, maxTokens = 4096 } = options;
 
-  const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-      "HTTP-Referer": "https://3words.game",
-      "X-Title": "3 Words to Game",
-    },
-    body: JSON.stringify({
-      model: "anthropic/claude-sonnet-4",
-      messages,
-      temperature,
-      max_tokens: maxTokens,
-    }),
-  });
+	const response = await fetch(
+		"https://openrouter.ai/api/v1/chat/completions",
+		{
+			method: "POST",
+			headers: {
+				Authorization: `Bearer ${apiKey}`,
+				"Content-Type": "application/json",
+				"HTTP-Referer": "https://3words.game",
+				"X-Title": "3 Words to Game",
+			},
+			body: JSON.stringify({
+				model: "anthropic/claude-sonnet-4",
+				messages,
+				temperature,
+				max_tokens: maxTokens,
+			}),
+		},
+	);
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`OpenRouter API error (${response.status}): ${errorText}`);
-  }
+	if (!response.ok) {
+		const errorText = await response.text();
+		throw new Error(`OpenRouter API error (${response.status}): ${errorText}`);
+	}
 
-  const data = await response.json() as { choices: Array<{ message: { content: string } }> };
-  const content = data.choices?.[0]?.message?.content;
-  if (!content) throw new Error("No content in OpenRouter response");
-  return content;
+	const data = (await response.json()) as {
+		choices: Array<{ message: { content: string } }>;
+	};
+	const content = data.choices?.[0]?.message?.content;
+	if (!content) throw new Error("No content in OpenRouter response");
+	return content;
 }
 
 function extractJSON(text: string): string {
-  const fenceMatch = text.match(/```(?:json)?\s*\n?([\s\S]*?)\n?\s*```/);
-  if (fenceMatch) return fenceMatch[1].trim();
-  return text.trim();
+	const fenceMatch = text.match(/```(?:json)?\s*\n?([\s\S]*?)\n?\s*```/);
+	if (fenceMatch) return fenceMatch[1].trim();
+	return text.trim();
 }
 
 // === ENGINE SHELL (duplicated for Convex runtime) ===
@@ -213,7 +224,7 @@ Rules:
 - The game runs on an 800x600 canvas`;
 
 function buildMechanicSystemPrompt(spec: string): string {
-  return `You are implementing only the mechanic layer for a tiny 2D canvas game.
+	return `You are implementing only the mechanic layer for a tiny 2D canvas game.
 
 You must output valid JavaScript for exactly these three functions:
 - initMechanic(state) — initialize game state
@@ -252,178 +263,195 @@ Start with: function initMechanic(state) {`;
 // === MUTATIONS ===
 
 export const enqueueGeneration = mutation({
-  args: { prompt: v.string() },
-  handler: async (ctx, { prompt }) => {
-    const id = await ctx.db.insert("generations", {
-      prompt,
-      status: "queued",
-    });
-    await ctx.scheduler.runAfter(0, internal.generations.runPipeline, {
-      generationId: id,
-    });
-    return id;
-  },
+	args: { prompt: v.string() },
+	handler: async (ctx, { prompt }) => {
+		const id = await ctx.db.insert("generations", {
+			prompt,
+			status: "queued",
+		});
+		await ctx.scheduler.runAfter(0, internal.generations.runPipeline, {
+			generationId: id,
+		});
+		return id;
+	},
 });
 
 export const updateGeneration = internalMutation({
-  args: {
-    generationId: v.id("generations"),
-    fields: v.object({
-      status: v.optional(
-        v.union(
-          v.literal("queued"),
-          v.literal("expanding"),
-          v.literal("building"),
-          v.literal("compiling"),
-          v.literal("evaluating"),
-          v.literal("done"),
-          v.literal("failed")
-        )
-      ),
-      spec: v.optional(v.string()),
-      mechanicCode: v.optional(v.string()),
-      html: v.optional(v.string()),
-      summaryScore: v.optional(v.float64()),
-      runtimePass: v.optional(v.boolean()),
-      interactionPass: v.optional(v.boolean()),
-      judgeScore: v.optional(v.float64()),
-      error: v.optional(v.string()),
-    }),
-  },
-  handler: async (ctx, { generationId, fields }) => {
-    await ctx.db.patch(generationId, fields);
-  },
+	args: {
+		generationId: v.id("generations"),
+		fields: v.object({
+			status: v.optional(
+				v.union(
+					v.literal("queued"),
+					v.literal("expanding"),
+					v.literal("building"),
+					v.literal("compiling"),
+					v.literal("evaluating"),
+					v.literal("done"),
+					v.literal("failed"),
+				),
+			),
+			spec: v.optional(v.string()),
+			mechanicCode: v.optional(v.string()),
+			html: v.optional(v.string()),
+			summaryScore: v.optional(v.float64()),
+			runtimePass: v.optional(v.boolean()),
+			interactionPass: v.optional(v.boolean()),
+			judgeScore: v.optional(v.float64()),
+			error: v.optional(v.string()),
+		}),
+	},
+	handler: async (ctx, { generationId, fields }) => {
+		await ctx.db.patch(generationId, fields);
+	},
 });
 
 export const saveEvalResult = internalMutation({
-  args: {
-    generationId: v.id("generations"),
-    type: v.union(v.literal("runtime"), v.literal("interaction"), v.literal("judge")),
-    status: v.union(v.literal("queued"), v.literal("running"), v.literal("done"), v.literal("failed")),
-    result: v.optional(v.string()),
-  },
-  handler: async (ctx, args) => {
-    await ctx.db.insert("evalRuns", args);
-  },
+	args: {
+		generationId: v.id("generations"),
+		type: v.union(
+			v.literal("runtime"),
+			v.literal("interaction"),
+			v.literal("judge"),
+		),
+		status: v.union(
+			v.literal("queued"),
+			v.literal("running"),
+			v.literal("done"),
+			v.literal("failed"),
+		),
+		result: v.optional(v.string()),
+	},
+	handler: async (ctx, args) => {
+		await ctx.db.insert("evalRuns", args);
+	},
 });
 
 // === QUERIES ===
 
 export const listGenerations = query({
-  args: {},
-  handler: async (ctx) => {
-    return await ctx.db.query("generations").order("desc").take(50);
-  },
+	args: {},
+	handler: async (ctx) => {
+		return await ctx.db.query("generations").order("desc").take(50);
+	},
 });
 
 export const getGeneration = query({
-  args: { generationId: v.id("generations") },
-  handler: async (ctx, { generationId }) => {
-    const generation = await ctx.db.get(generationId);
-    if (!generation) return null;
+	args: { generationId: v.id("generations") },
+	handler: async (ctx, { generationId }) => {
+		const generation = await ctx.db.get(generationId);
+		if (!generation) return null;
 
-    const evalRuns = await ctx.db
-      .query("evalRuns")
-      .withIndex("by_generation", (q) => q.eq("generationId", generationId))
-      .collect();
+		const evalRuns = await ctx.db
+			.query("evalRuns")
+			.withIndex("by_generation", (q) => q.eq("generationId", generationId))
+			.collect();
 
-    return { ...generation, evalRuns };
-  },
+		return { ...generation, evalRuns };
+	},
 });
 
 export const getGenerationInternal = internalQuery({
-  args: { generationId: v.id("generations") },
-  handler: async (ctx, { generationId }) => {
-    return await ctx.db.get(generationId);
-  },
+	args: { generationId: v.id("generations") },
+	handler: async (ctx, { generationId }) => {
+		return await ctx.db.get(generationId);
+	},
 });
 
 // === PIPELINE ACTION ===
 
 export const runPipeline = internalAction({
-  args: { generationId: v.id("generations") },
-  handler: async (ctx, { generationId }) => {
-    const apiKey = process.env.OPENROUTER_API_KEY;
-    if (!apiKey) {
-      await ctx.runMutation(internal.generations.updateGeneration, {
-        generationId,
-        fields: { status: "failed" as const, error: "OPENROUTER_API_KEY not configured" },
-      });
-      return;
-    }
+	args: { generationId: v.id("generations") },
+	handler: async (ctx, { generationId }) => {
+		const apiKey = process.env.OPENROUTER_API_KEY;
+		if (!apiKey) {
+			await ctx.runMutation(internal.generations.updateGeneration, {
+				generationId,
+				fields: {
+					status: "failed" as const,
+					error: "OPENROUTER_API_KEY not configured",
+				},
+			});
+			return;
+		}
 
-    try {
-      // Read the prompt
-      const generation = await ctx.runQuery(internal.generations.getGenerationInternal, {
-        generationId,
-      });
-      if (!generation) throw new Error("Generation not found");
+		try {
+			// Read the prompt
+			const generation = await ctx.runQuery(
+				internal.generations.getGenerationInternal,
+				{
+					generationId,
+				},
+			);
+			if (!generation) throw new Error("Generation not found");
 
-      // Step 1: Expand intent
-      await ctx.runMutation(internal.generations.updateGeneration, {
-        generationId,
-        fields: { status: "expanding" as const },
-      });
+			// Step 1: Expand intent
+			await ctx.runMutation(internal.generations.updateGeneration, {
+				generationId,
+				fields: { status: "expanding" as const },
+			});
 
-      const specResponse = await chatCompletion(
-        apiKey,
-        [
-          { role: "system", content: EXPAND_SYSTEM_PROMPT },
-          { role: "user", content: generation.prompt },
-        ],
-        { temperature: 0.7, maxTokens: 1024 }
-      );
-      const specJson = extractJSON(specResponse);
-      const spec = JSON.parse(specJson);
+			const specResponse = await chatCompletion(
+				apiKey,
+				[
+					{ role: "system", content: EXPAND_SYSTEM_PROMPT },
+					{ role: "user", content: generation.prompt },
+				],
+				{ temperature: 0.7, maxTokens: 1024 },
+			);
+			const specJson = extractJSON(specResponse);
+			const spec = JSON.parse(specJson);
 
-      if (!spec.title || !spec.genre || !spec.entities?.length) {
-        throw new Error("Invalid GameSpec from LLM");
-      }
+			if (!spec.title || !spec.genre || !spec.entities?.length) {
+				throw new Error("Invalid GameSpec from LLM");
+			}
 
-      await ctx.runMutation(internal.generations.updateGeneration, {
-        generationId,
-        fields: { status: "building" as const, spec: specJson },
-      });
+			await ctx.runMutation(internal.generations.updateGeneration, {
+				generationId,
+				fields: { status: "building" as const, spec: specJson },
+			});
 
-      // Step 2: Build mechanic
-      const mechanicResponse = await chatCompletion(
-        apiKey,
-        [
-          { role: "system", content: buildMechanicSystemPrompt(specJson) },
-          {
-            role: "user",
-            content: `Generate the three mechanic functions for "${spec.title}" (${spec.genre} genre). Output ONLY JavaScript function definitions.`,
-          },
-        ],
-        { temperature: 0.3, maxTokens: 4096 }
-      );
+			// Step 2: Build mechanic
+			const mechanicResponse = await chatCompletion(
+				apiKey,
+				[
+					{ role: "system", content: buildMechanicSystemPrompt(specJson) },
+					{
+						role: "user",
+						content: `Generate the three mechanic functions for "${spec.title}" (${spec.genre} genre). Output ONLY JavaScript function definitions.`,
+					},
+				],
+				{ temperature: 0.3, maxTokens: 4096 },
+			);
 
-      let mechanicCode = mechanicResponse.trim();
-      const fenceMatch = mechanicCode.match(/```(?:javascript|js)?\s*\n?([\s\S]*?)\n?\s*```/);
-      if (fenceMatch) mechanicCode = fenceMatch[1].trim();
+			let mechanicCode = mechanicResponse.trim();
+			const fenceMatch = mechanicCode.match(
+				/```(?:javascript|js)?\s*\n?([\s\S]*?)\n?\s*```/,
+			);
+			if (fenceMatch) mechanicCode = fenceMatch[1].trim();
 
-      if (!mechanicCode.includes("function initMechanic")) {
-        throw new Error("Generated code missing initMechanic");
-      }
+			if (!mechanicCode.includes("function initMechanic")) {
+				throw new Error("Generated code missing initMechanic");
+			}
 
-      await ctx.runMutation(internal.generations.updateGeneration, {
-        generationId,
-        fields: { status: "compiling" as const, mechanicCode },
-      });
+			await ctx.runMutation(internal.generations.updateGeneration, {
+				generationId,
+				fields: { status: "compiling" as const, mechanicCode },
+			});
 
-      // Step 3: Compile
-      const html = ENGINE_SHELL.replace("__MECHANIC_CODE__", mechanicCode);
+			// Step 3: Compile
+			const html = ENGINE_SHELL.replace("__MECHANIC_CODE__", mechanicCode);
 
-      await ctx.runMutation(internal.generations.updateGeneration, {
-        generationId,
-        fields: { status: "done" as const, html },
-      });
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : String(err);
-      await ctx.runMutation(internal.generations.updateGeneration, {
-        generationId,
-        fields: { status: "failed" as const, error: errorMessage },
-      });
-    }
-  },
+			await ctx.runMutation(internal.generations.updateGeneration, {
+				generationId,
+				fields: { status: "done" as const, html },
+			});
+		} catch (err) {
+			const errorMessage = err instanceof Error ? err.message : String(err);
+			await ctx.runMutation(internal.generations.updateGeneration, {
+				generationId,
+				fields: { status: "failed" as const, error: errorMessage },
+			});
+		}
+	},
 });

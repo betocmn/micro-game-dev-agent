@@ -16,7 +16,7 @@ import { chatCompletion, extractJSON } from "@/lib/openrouter";
 import type { GameSpec } from "@/types";
 
 function buildSystemPrompt(spec: GameSpec): string {
-  return `You are implementing only the mechanic layer for a tiny 2D canvas game.
+	return `You are implementing only the mechanic layer for a tiny 2D canvas game.
 
 You must output valid JavaScript for exactly these three functions:
 - initMechanic(state) — initialize game state (player position, entity arrays, etc.)
@@ -67,38 +67,40 @@ Start directly with: function initMechanic(state) {`;
 }
 
 export async function buildMechanic(
-  apiKey: string,
-  spec: GameSpec
+	apiKey: string,
+	spec: GameSpec,
 ): Promise<string> {
-  const response = await chatCompletion(apiKey, {
-    messages: [
-      { role: "system", content: buildSystemPrompt(spec) },
-      {
-        role: "user",
-        content: `Generate the three mechanic functions for "${spec.title}" (${spec.genre} genre). Remember: output ONLY JavaScript function definitions, nothing else.`,
-      },
-    ],
-    temperature: 0.3, // Lower temperature for more reliable code generation
-    maxTokens: 4096,
-  });
+	const response = await chatCompletion(apiKey, {
+		messages: [
+			{ role: "system", content: buildSystemPrompt(spec) },
+			{
+				role: "user",
+				content: `Generate the three mechanic functions for "${spec.title}" (${spec.genre} genre). Remember: output ONLY JavaScript function definitions, nothing else.`,
+			},
+		],
+		temperature: 0.3, // Lower temperature for more reliable code generation
+		maxTokens: 4096,
+	});
 
-  // Extract code — handle markdown fences if present
-  let code = response.trim();
-  const fenceMatch = code.match(/```(?:javascript|js)?\s*\n?([\s\S]*?)\n?\s*```/);
-  if (fenceMatch) {
-    code = fenceMatch[1].trim();
-  }
+	// Extract code — handle markdown fences if present
+	let code = response.trim();
+	const fenceMatch = code.match(
+		/```(?:javascript|js)?\s*\n?([\s\S]*?)\n?\s*```/,
+	);
+	if (fenceMatch) {
+		code = fenceMatch[1].trim();
+	}
 
-  // Validate that all 3 functions exist
-  if (!code.includes("function initMechanic")) {
-    throw new Error("Generated code missing initMechanic function");
-  }
-  if (!code.includes("function updateMechanic")) {
-    throw new Error("Generated code missing updateMechanic function");
-  }
-  if (!code.includes("function renderMechanic")) {
-    throw new Error("Generated code missing renderMechanic function");
-  }
+	// Validate that all 3 functions exist
+	if (!code.includes("function initMechanic")) {
+		throw new Error("Generated code missing initMechanic function");
+	}
+	if (!code.includes("function updateMechanic")) {
+		throw new Error("Generated code missing updateMechanic function");
+	}
+	if (!code.includes("function renderMechanic")) {
+		throw new Error("Generated code missing renderMechanic function");
+	}
 
-  return code;
+	return code;
 }

@@ -48,25 +48,25 @@ Rules:
 - The game runs on an 800x600 canvas`;
 
 export async function expandIntent(
-  apiKey: string,
-  prompt: string
+	apiKey: string,
+	prompt: string,
 ): Promise<GameSpec> {
-  const response = await chatCompletion(apiKey, {
-    messages: [
-      { role: "system", content: SYSTEM_PROMPT },
-      { role: "user", content: prompt },
-    ],
-    temperature: 0.7,
-    maxTokens: 1024,
-  });
+	const response = await chatCompletion(apiKey, {
+		messages: [
+			{ role: "system", content: SYSTEM_PROMPT },
+			{ role: "user", content: prompt },
+		],
+		temperature: 0.7,
+		maxTokens: 1024,
+	});
 
-  const json = extractJSON(response);
-  const spec: GameSpec = JSON.parse(json);
+	const json = extractJSON(response);
+	const spec: GameSpec = JSON.parse(json);
 
-  // Basic validation
-  if (!spec.title || !spec.genre || !spec.entities?.length) {
-    throw new Error("Invalid GameSpec: missing required fields");
-  }
+	// Basic validation
+	if (!spec.title || !spec.genre || !spec.entities?.length) {
+		throw new Error("Invalid GameSpec: missing required fields");
+	}
 
-  return spec;
+	return spec;
 }
