@@ -13,6 +13,7 @@
  */
 
 import { chatCompletion, extractJSON } from "@/lib/openrouter";
+import { judgeEvalResultSchema } from "@/lib/schemas";
 import type {
 	GameSpec,
 	InteractionEvalResult,
@@ -84,20 +85,48 @@ Score how well this game matches the spec.`;
 	});
 
 	const json = extractJSON(response);
-	const result: JudgeEvalResult = JSON.parse(json);
+	const parsed = JSON.parse(json) as Partial<JudgeEvalResult>;
+	const normalizedResult: JudgeEvalResult = {
+		genreMatch:
+			typeof parsed.genreMatch === "number" &&
+			parsed.genreMatch >= 1 &&
+			parsed.genreMatch <= 5
+				? Math.round(parsed.genreMatch)
+				: 3,
+		mechanicMatch:
+			typeof parsed.mechanicMatch === "number" &&
+			parsed.mechanicMatch >= 1 &&
+			parsed.mechanicMatch <= 5
+				? Math.round(parsed.mechanicMatch)
+				: 3,
+		goalMatch:
+			typeof parsed.goalMatch === "number" &&
+			parsed.goalMatch >= 1 &&
+			parsed.goalMatch <= 5
+				? Math.round(parsed.goalMatch)
+				: 3,
+		controlsMatch:
+			typeof parsed.controlsMatch === "number" &&
+			parsed.controlsMatch >= 1 &&
+			parsed.controlsMatch <= 5
+				? Math.round(parsed.controlsMatch)
+				: 3,
+		coherence:
+			typeof parsed.coherence === "number" &&
+			parsed.coherence >= 1 &&
+			parsed.coherence <= 5
+				? Math.round(parsed.coherence)
+				: 3,
+		summary:
+			typeof parsed.summary === "string" && parsed.summary.length > 0
+				? parsed.summary
+				: "Judge response was incomplete.",
+		criticalMisses: Array.isArray(parsed.criticalMisses)
+			? parsed.criticalMisses.filter(
+					(miss): miss is string => typeof miss === "string",
+				)
+			: [],
+	};
 
-	// Validate scores are in range
-	for (const key of [
-		"genreMatch",
-		"mechanicMatch",
-		"goalMatch",
-		"controlsMatch",
-		"coherence",
-	] as const) {
-		if (typeof result[key] !== "number" || result[key] < 1 || result[key] > 5) {
-			result[key] = 3; // Default to middle score if invalid
-		}
-	}
-
-	return result;
+	return judgeEvalResultSchema.parse(normalizedResult);
 }

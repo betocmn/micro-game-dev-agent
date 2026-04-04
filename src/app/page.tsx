@@ -3,27 +3,14 @@
 import { useMutation, useQuery } from "convex/react";
 import Link from "next/link";
 import { useState } from "react";
+import {
+	formatFailureStage,
+	STATUS_COLORS,
+	STATUS_LABELS,
+} from "@/lib/generationStatus";
+import { safeParseJson } from "@/lib/safeJson";
+import { gameSpecSchema } from "@/lib/schemas";
 import { api } from "../../convex/_generated/api";
-
-const STATUS_COLORS: Record<string, string> = {
-	queued: "bg-gray-600",
-	expanding: "bg-blue-600 animate-pulse",
-	building: "bg-purple-600 animate-pulse",
-	compiling: "bg-indigo-600 animate-pulse",
-	evaluating: "bg-yellow-600 animate-pulse",
-	done: "bg-green-600",
-	failed: "bg-red-600",
-};
-
-const STATUS_LABELS: Record<string, string> = {
-	queued: "Queued",
-	expanding: "Expanding intent...",
-	building: "Building mechanic...",
-	compiling: "Compiling game...",
-	evaluating: "Running evals...",
-	done: "Done",
-	failed: "Failed",
-};
 
 export default function Home() {
 	const [prompt, setPrompt] = useState("");
@@ -39,7 +26,6 @@ export default function Home() {
 
 	return (
 		<div className="min-h-screen p-8 max-w-4xl mx-auto">
-			{/* Header */}
 			<div className="mb-8">
 				<h1 className="text-3xl font-bold mb-2">3 Words to Game</h1>
 				<p className="text-gray-400">
@@ -48,7 +34,6 @@ export default function Home() {
 				</p>
 			</div>
 
-			{/* Prompt input */}
 			<form onSubmit={handleSubmit} className="mb-10">
 				<div className="flex gap-3">
 					<input
@@ -71,7 +56,6 @@ export default function Home() {
 				</div>
 			</form>
 
-			{/* Generations list */}
 			<div className="space-y-4">
 				<h2 className="text-lg font-semibold text-gray-300">Generations</h2>
 
@@ -85,25 +69,25 @@ export default function Home() {
 					</p>
 				)}
 
-				{/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-				{generations?.map((gen: any) => {
-					const spec = gen.spec ? JSON.parse(gen.spec) : null;
+				{generations?.map((generation) => {
+					const spec = safeParseJson(generation.spec, gameSpecSchema);
+					const failureStage = formatFailureStage(generation.failureStage);
 
 					return (
 						<Link
-							key={gen._id}
-							href={`/g/${gen._id}`}
+							key={generation._id}
+							href={`/g/${generation._id}`}
 							className="block p-4 bg-gray-900 border border-gray-800 rounded-lg
                          hover:border-gray-600 transition-colors"
 						>
 							<div className="flex items-center justify-between mb-2">
 								<span className="text-lg font-medium">
-									&ldquo;{gen.prompt}&rdquo;
+									&ldquo;{generation.prompt}&rdquo;
 								</span>
 								<span
-									className={`px-3 py-1 rounded-full text-xs font-medium ${STATUS_COLORS[gen.status]}`}
+									className={`px-3 py-1 rounded-full text-xs font-medium ${STATUS_COLORS[generation.status]}`}
 								>
-									{STATUS_LABELS[gen.status]}
+									{STATUS_LABELS[generation.status]}
 								</span>
 							</div>
 
@@ -115,37 +99,44 @@ export default function Home() {
 								</div>
 							)}
 
-							{gen.status === "done" && gen.summaryScore !== undefined && (
-								<div className="mt-2 flex gap-4 text-xs">
-									<span
-										className={
-											gen.runtimePass ? "text-green-400" : "text-red-400"
-										}
-									>
-										Runtime: {gen.runtimePass ? "PASS" : "FAIL"}
-									</span>
-									<span
-										className={
-											gen.interactionPass ? "text-green-400" : "text-red-400"
-										}
-									>
-										Interaction: {gen.interactionPass ? "PASS" : "FAIL"}
-									</span>
-									{gen.judgeScore !== undefined && (
-										<span className="text-blue-400">
-											Judge: {gen.judgeScore}/100
+							{generation.status === "done" &&
+								generation.summaryScore !== undefined && (
+									<div className="mt-2 flex gap-4 text-xs">
+										<span
+											className={
+												generation.runtimePass
+													? "text-green-400"
+													: "text-red-400"
+											}
+										>
+											Runtime: {generation.runtimePass ? "PASS" : "FAIL"}
 										</span>
-									)}
-									<span className="text-yellow-400 font-medium">
-										Score: {gen.summaryScore}/100
-									</span>
-								</div>
-							)}
+										<span
+											className={
+												generation.interactionPass
+													? "text-green-400"
+													: "text-red-400"
+											}
+										>
+											Interaction:{" "}
+											{generation.interactionPass ? "PASS" : "FAIL"}
+										</span>
+										{generation.judgeScore !== undefined && (
+											<span className="text-blue-400">
+												Judge: {generation.judgeScore}/100
+											</span>
+										)}
+										<span className="text-yellow-400 font-medium">
+											Score: {generation.summaryScore}/100
+										</span>
+									</div>
+								)}
 
-							{gen.status === "failed" && gen.error && (
-								<p className="mt-2 text-xs text-red-400 truncate">
-									Error: {gen.error}
-								</p>
+							{generation.status === "failed" && generation.error && (
+								<div className="mt-2 space-y-1 text-xs text-red-400">
+									{failureStage && <p>Stage: {failureStage}</p>}
+									<p className="truncate">Error: {generation.error}</p>
+								</div>
 							)}
 						</Link>
 					);

@@ -10,8 +10,9 @@
  * (mechanic builder, evals) have a reliable contract to work with.
  */
 
-import { chatCompletion, extractJSON } from "@/lib/openrouter";
-import type { GameSpec } from "@/types";
+import { chatCompletion, extractJSON } from "../lib/openrouter";
+import { gameSpecSchema } from "../lib/schemas";
+import type { GameSpec } from "../types";
 
 const SYSTEM_PROMPT = `You interpret vague teenager prompts into a minimal browser-game spec.
 Assume the user is underspecified, not confused.
@@ -61,12 +62,13 @@ export async function expandIntent(
 	});
 
 	const json = extractJSON(response);
-	const spec: GameSpec = JSON.parse(json);
-
-	// Basic validation
-	if (!spec.title || !spec.genre || !spec.entities?.length) {
-		throw new Error("Invalid GameSpec: missing required fields");
+	const parsed = JSON.parse(json);
+	const result = gameSpecSchema.safeParse(parsed);
+	if (!result.success) {
+		throw new Error(
+			`Invalid GameSpec: ${result.error.issues[0]?.message ?? "schema validation failed"}`,
+		);
 	}
 
-	return spec;
+	return result.data;
 }

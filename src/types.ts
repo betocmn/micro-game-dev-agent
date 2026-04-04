@@ -35,6 +35,13 @@ export type GenerationStatus =
 	| "done"
 	| "failed";
 
+export type GenerationFailureStage =
+	| "setup"
+	| "expanding"
+	| "building"
+	| "compiling"
+	| "evaluating";
+
 export interface RuntimeEvalResult {
 	pass: boolean;
 	errors: string[];

@@ -9,10 +9,10 @@
  * status so the frontend can show progress in real-time.
  */
 
-import { buildMechanic } from "@/agents/buildMechanic";
-import { expandIntent } from "@/agents/expandIntent";
-import { compileGame } from "@/compile/compileGame";
-import type { PipelineResult } from "@/types";
+import { buildMechanic } from "../agents/buildMechanic";
+import { expandIntent } from "../agents/expandIntent";
+import { compileGame } from "../compile/compileGame";
+import type { PipelineResult } from "../types";
 
 export async function runGenerationPipeline(
 	apiKey: string,

@@ -24,6 +24,15 @@ export default defineSchema({
 			v.literal("done"),
 			v.literal("failed"),
 		),
+		failureStage: v.optional(
+			v.union(
+				v.literal("setup"),
+				v.literal("expanding"),
+				v.literal("building"),
+				v.literal("compiling"),
+				v.literal("evaluating"),
+			),
+		),
 		spec: v.optional(v.string()), // JSON stringified GameSpec
 		mechanicCode: v.optional(v.string()),
 		html: v.optional(v.string()),
