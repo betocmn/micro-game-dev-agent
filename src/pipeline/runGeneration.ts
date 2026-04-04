@@ -9,23 +9,23 @@
  * status so the frontend can show progress in real-time.
  */
 
-import { expandIntent } from "@/agents/expandIntent";
 import { buildMechanic } from "@/agents/buildMechanic";
+import { expandIntent } from "@/agents/expandIntent";
 import { compileGame } from "@/compile/compileGame";
 import type { PipelineResult } from "@/types";
 
 export async function runGenerationPipeline(
-  apiKey: string,
-  prompt: string
+	apiKey: string,
+	prompt: string,
 ): Promise<PipelineResult> {
-  // Step 1: Expand the vague prompt into a structured spec
-  const spec = await expandIntent(apiKey, prompt);
+	// Step 1: Expand the vague prompt into a structured spec
+	const spec = await expandIntent(apiKey, prompt);
 
-  // Step 2: Generate the mechanic code from the spec
-  const mechanicCode = await buildMechanic(apiKey, spec);
+	// Step 2: Generate the mechanic code from the spec
+	const mechanicCode = await buildMechanic(apiKey, spec);
 
-  // Step 3: Compile into a playable HTML file
-  const html = compileGame(mechanicCode);
+	// Step 3: Compile into a playable HTML file
+	const html = compileGame(mechanicCode);
 
-  return { spec, mechanicCode, html };
+	return { spec, mechanicCode, html };
 }

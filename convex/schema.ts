@@ -13,40 +13,40 @@ import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
 export default defineSchema({
-  generations: defineTable({
-    prompt: v.string(),
-    status: v.union(
-      v.literal("queued"),
-      v.literal("expanding"),
-      v.literal("building"),
-      v.literal("compiling"),
-      v.literal("evaluating"),
-      v.literal("done"),
-      v.literal("failed")
-    ),
-    spec: v.optional(v.string()), // JSON stringified GameSpec
-    mechanicCode: v.optional(v.string()),
-    html: v.optional(v.string()),
-    summaryScore: v.optional(v.float64()),
-    runtimePass: v.optional(v.boolean()),
-    interactionPass: v.optional(v.boolean()),
-    judgeScore: v.optional(v.float64()),
-    error: v.optional(v.string()),
-  }),
+	generations: defineTable({
+		prompt: v.string(),
+		status: v.union(
+			v.literal("queued"),
+			v.literal("expanding"),
+			v.literal("building"),
+			v.literal("compiling"),
+			v.literal("evaluating"),
+			v.literal("done"),
+			v.literal("failed"),
+		),
+		spec: v.optional(v.string()), // JSON stringified GameSpec
+		mechanicCode: v.optional(v.string()),
+		html: v.optional(v.string()),
+		summaryScore: v.optional(v.float64()),
+		runtimePass: v.optional(v.boolean()),
+		interactionPass: v.optional(v.boolean()),
+		judgeScore: v.optional(v.float64()),
+		error: v.optional(v.string()),
+	}),
 
-  evalRuns: defineTable({
-    generationId: v.id("generations"),
-    type: v.union(
-      v.literal("runtime"),
-      v.literal("interaction"),
-      v.literal("judge")
-    ),
-    status: v.union(
-      v.literal("queued"),
-      v.literal("running"),
-      v.literal("done"),
-      v.literal("failed")
-    ),
-    result: v.optional(v.string()), // JSON stringified eval result
-  }).index("by_generation", ["generationId"]),
+	evalRuns: defineTable({
+		generationId: v.id("generations"),
+		type: v.union(
+			v.literal("runtime"),
+			v.literal("interaction"),
+			v.literal("judge"),
+		),
+		status: v.union(
+			v.literal("queued"),
+			v.literal("running"),
+			v.literal("done"),
+			v.literal("failed"),
+		),
+		result: v.optional(v.string()), // JSON stringified eval result
+	}).index("by_generation", ["generationId"]),
 });

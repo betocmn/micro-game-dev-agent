@@ -13,5 +13,5 @@
 import { ENGINE_SHELL } from "./engineShell";
 
 export function compileGame(mechanicCode: string): string {
-  return ENGINE_SHELL.replace("__MECHANIC_CODE__", mechanicCode);
+	return ENGINE_SHELL.replace("__MECHANIC_CODE__", mechanicCode);
 }

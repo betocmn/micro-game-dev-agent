@@ -13,7 +13,12 @@
  */
 
 import { chatCompletion, extractJSON } from "@/lib/openrouter";
-import type { GameSpec, JudgeEvalResult, RuntimeEvalResult, InteractionEvalResult } from "@/types";
+import type {
+	GameSpec,
+	InteractionEvalResult,
+	JudgeEvalResult,
+	RuntimeEvalResult,
+} from "@/types";
 
 const JUDGE_SYSTEM_PROMPT = `You are grading whether a generated game matches its intended spec.
 You will receive the original prompt, the expanded spec, the generated mechanic code,
@@ -38,14 +43,14 @@ Return ONLY valid JSON matching this schema:
 }`;
 
 export async function runJudgeEval(
-  apiKey: string,
-  prompt: string,
-  spec: GameSpec,
-  mechanicCode: string,
-  runtimeResult: RuntimeEvalResult,
-  interactionResult: InteractionEvalResult
+	apiKey: string,
+	prompt: string,
+	spec: GameSpec,
+	mechanicCode: string,
+	runtimeResult: RuntimeEvalResult,
+	interactionResult: InteractionEvalResult,
 ): Promise<JudgeEvalResult> {
-  const userMessage = `
+	const userMessage = `
 ORIGINAL PROMPT: "${prompt}"
 
 EXPANDED SPEC:
@@ -69,24 +74,30 @@ INTERACTION EVAL RESULT:
 
 Score how well this game matches the spec.`;
 
-  const response = await chatCompletion(apiKey, {
-    messages: [
-      { role: "system", content: JUDGE_SYSTEM_PROMPT },
-      { role: "user", content: userMessage },
-    ],
-    temperature: 0.2, // Low temperature for consistent scoring
-    maxTokens: 1024,
-  });
+	const response = await chatCompletion(apiKey, {
+		messages: [
+			{ role: "system", content: JUDGE_SYSTEM_PROMPT },
+			{ role: "user", content: userMessage },
+		],
+		temperature: 0.2, // Low temperature for consistent scoring
+		maxTokens: 1024,
+	});
 
-  const json = extractJSON(response);
-  const result: JudgeEvalResult = JSON.parse(json);
+	const json = extractJSON(response);
+	const result: JudgeEvalResult = JSON.parse(json);
 
-  // Validate scores are in range
-  for (const key of ["genreMatch", "mechanicMatch", "goalMatch", "controlsMatch", "coherence"] as const) {
-    if (typeof result[key] !== "number" || result[key] < 1 || result[key] > 5) {
-      result[key] = 3; // Default to middle score if invalid
-    }
-  }
+	// Validate scores are in range
+	for (const key of [
+		"genreMatch",
+		"mechanicMatch",
+		"goalMatch",
+		"controlsMatch",
+		"coherence",
+	] as const) {
+		if (typeof result[key] !== "number" || result[key] < 1 || result[key] > 5) {
+			result[key] = 3; // Default to middle score if invalid
+		}
+	}
 
-  return result;
+	return result;
 }
