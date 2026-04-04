@@ -20,15 +20,15 @@ Micro agent pipeline MVP: user types a vague prompt ("space dodge rocks"), an LL
 
 ## Commands
 
-- `npm run dev` — Start Next.js dev server
-- `npx convex dev` — Start Convex dev server
-- `npm run lint` — Run Biome lint
-- `npm run lint:fix` — Auto-fix lint issues
-- `npm run test:pipeline` — Test generation pipeline standalone
-- `npm run test:evals` — Test full pipeline + evals
+- `pnpm dev` — Start Next.js dev server
+- `pnpm convex dev` — Start Convex dev server
+- `pnpm lint` — Run Biome lint
+- `pnpm lint:fix` — Auto-fix lint issues
+- `pnpm test:pipeline` — Test generation pipeline standalone
+- `pnpm test:evals` — Test full pipeline + evals
 
 ## Rules
 
-- Always run `npm run lint` before committing
+- Always run `pnpm lint` before committing
 - Use semantic commit messages without parenthesis detail (e.g. `feat: add eval layer`)
 - Auto-commit after every change
