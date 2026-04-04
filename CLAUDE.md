@@ -24,11 +24,13 @@ Micro agent pipeline MVP: user types a vague prompt ("space dodge rocks"), an LL
 - `pnpm convex dev` — Start Convex dev server
 - `pnpm lint` — Run Biome lint
 - `pnpm lint:fix` — Auto-fix lint issues
+- `pnpm test` — Run unit tests (Vitest)
+- `pnpm test:watch` — Run tests in watch mode
 - `pnpm test:pipeline` — Test generation pipeline standalone
 - `pnpm test:evals` — Test full pipeline + evals
 
 ## Rules
 
-- Always run `pnpm lint` before committing
+- Always run `pnpm test` and `pnpm lint` before committing — both must pass
 - Use semantic commit messages without parenthesis detail (e.g. `feat: add eval layer`)
 - Auto-commit after every change
