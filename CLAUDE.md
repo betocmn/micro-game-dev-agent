@@ -22,6 +22,7 @@ Micro agent pipeline MVP: user types a vague prompt ("space dodge rocks"), an LL
 
 - `pnpm dev` — Start Next.js dev server
 - `pnpm convex dev` — Start Convex dev server
+- `pnpm check` — Run lint + typecheck
 - `pnpm lint` — Run Biome lint
 - `pnpm lint:fix` — Auto-fix lint issues
 - `pnpm test` — Run unit tests (Vitest)
@@ -31,6 +32,7 @@ Micro agent pipeline MVP: user types a vague prompt ("space dodge rocks"), an LL
 
 ## Rules
 
-- Always run `pnpm test` and `pnpm lint` before committing — both must pass
+- Always run `pnpm check` before committing — it must pass
+- Run `pnpm test` before committing when behavior changes
 - Use semantic commit messages without parenthesis detail (e.g. `feat: add eval layer`)
 - Auto-commit after every change
