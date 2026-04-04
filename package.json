@@ -8,6 +8,8 @@
 		"start": "next start",
 		"lint": "biome check .",
 		"lint:fix": "biome check --fix .",
+		"test": "vitest run",
+		"test:watch": "vitest",
 		"test:pipeline": "tsx src/pipeline/testPipeline.ts",
 		"test:evals": "tsx src/evals/testEvals.ts"
 	},
@@ -25,10 +27,12 @@
 		"@types/node": "^20",
 		"@types/react": "^19",
 		"@types/react-dom": "^19",
+		"@vitejs/plugin-react": "^6.0.1",
 		"eslint": "^9",
 		"eslint-config-next": "16.2.2",
 		"tailwindcss": "^4",
 		"tsx": "^4.21.0",
-		"typescript": "^5"
+		"typescript": "^5",
+		"vitest": "^4.1.2"
 	}
 }
