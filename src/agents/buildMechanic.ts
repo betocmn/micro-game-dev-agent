@@ -12,8 +12,8 @@
  * dramatically more reliable because the structure is always the same.
  */
 
-import { chatCompletion, extractJSON } from "@/lib/openrouter";
-import type { GameSpec } from "@/types";
+import { chatCompletion } from "../lib/openrouter";
+import type { GameSpec } from "../types";
 
 function buildSystemPrompt(spec: GameSpec): string {
 	return `You are implementing only the mechanic layer for a tiny 2D canvas game.

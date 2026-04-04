@@ -3,18 +3,20 @@
 import { useQuery } from "convex/react";
 import Link from "next/link";
 import { use, useState } from "react";
+import {
+	formatFailureStage,
+	STATUS_COLORS,
+	STATUS_LABELS,
+} from "@/lib/generationStatus";
+import { safeParseJson } from "@/lib/safeJson";
+import {
+	gameSpecSchema,
+	interactionEvalResultSchema,
+	judgeEvalResultSchema,
+	runtimeEvalResultSchema,
+} from "@/lib/schemas";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
-
-const STATUS_COLORS: Record<string, string> = {
-	queued: "bg-gray-600",
-	expanding: "bg-blue-600 animate-pulse",
-	building: "bg-purple-600 animate-pulse",
-	compiling: "bg-indigo-600 animate-pulse",
-	evaluating: "bg-yellow-600 animate-pulse",
-	done: "bg-green-600",
-	failed: "bg-red-600",
-};
 
 export default function GenerationPage({
 	params,
@@ -48,11 +50,11 @@ export default function GenerationPage({
 		);
 	}
 
-	const spec = generation.spec ? JSON.parse(generation.spec) : null;
+	const spec = safeParseJson(generation.spec, gameSpecSchema);
+	const failureStage = formatFailureStage(generation.failureStage);
 
 	return (
 		<div className="min-h-screen p-8 max-w-6xl mx-auto">
-			{/* Header */}
 			<div className="flex items-center gap-4 mb-6">
 				<Link href="/" className="text-gray-400 hover:text-white">
 					&larr; Back
@@ -63,13 +65,11 @@ export default function GenerationPage({
 				<span
 					className={`px-3 py-1 rounded-full text-xs font-medium ${STATUS_COLORS[generation.status]}`}
 				>
-					{generation.status}
+					{STATUS_LABELS[generation.status]}
 				</span>
 			</div>
 
-			{/* Main content: game + details side by side */}
 			<div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-				{/* Game iframe — takes 2 cols */}
 				<div className="lg:col-span-2">
 					{generation.html ? (
 						<div className="bg-gray-900 border border-gray-800 rounded-lg overflow-hidden">
@@ -97,9 +97,7 @@ export default function GenerationPage({
 					)}
 				</div>
 
-				{/* Details sidebar */}
 				<div className="space-y-4">
-					{/* Spec */}
 					{spec && (
 						<div className="bg-gray-900 border border-gray-800 rounded-lg">
 							<button
@@ -142,10 +140,7 @@ export default function GenerationPage({
 										<div>
 											<span className="text-gray-500">Entities:</span>{" "}
 											{spec.entities
-												?.map(
-													(e: { name: string; role: string }) =>
-														`${e.name} (${e.role})`,
-												)
+												.map((entity) => `${entity.name} (${entity.role})`)
 												.join(", ")}
 										</div>
 									</div>
@@ -154,16 +149,27 @@ export default function GenerationPage({
 						</div>
 					)}
 
-					{/* Eval Results */}
-					{generation.evalRuns && generation.evalRuns.length > 0 && (
+					{generation.evalRuns.length > 0 && (
 						<div className="bg-gray-900 border border-gray-800 rounded-lg p-3">
 							<h3 className="font-medium mb-3">Eval Results</h3>
 							<div className="space-y-2">
-								{/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-								{generation.evalRuns.map((evalRun: any) => {
-									const result = evalRun.result
-										? JSON.parse(evalRun.result)
-										: null;
+								{generation.evalRuns.map((evalRun) => {
+									const runtimeResult =
+										evalRun.type === "runtime"
+											? safeParseJson(evalRun.result, runtimeEvalResultSchema)
+											: null;
+									const interactionResult =
+										evalRun.type === "interaction"
+											? safeParseJson(
+													evalRun.result,
+													interactionEvalResultSchema,
+												)
+											: null;
+									const judgeResult =
+										evalRun.type === "judge"
+											? safeParseJson(evalRun.result, judgeEvalResultSchema)
+											: null;
+
 									return (
 										<div
 											key={evalRun._id}
@@ -185,35 +191,39 @@ export default function GenerationPage({
 													{evalRun.status}
 												</span>
 											</div>
-											{result && evalRun.type === "runtime" && (
+											{runtimeResult && (
 												<span
 													className={
-														result.pass ? "text-green-400" : "text-red-400"
+														runtimeResult.pass
+															? "text-green-400"
+															: "text-red-400"
 													}
 												>
-													{result.pass ? "PASS" : "FAIL"}
-													{result.errors?.length > 0 &&
-														` (${result.errors.length} errors)`}
+													{runtimeResult.pass ? "PASS" : "FAIL"}
+													{runtimeResult.errors.length > 0 &&
+														` (${runtimeResult.errors.length} errors)`}
 												</span>
 											)}
-											{result && evalRun.type === "interaction" && (
+											{interactionResult && (
 												<span
 													className={
-														result.pass ? "text-green-400" : "text-red-400"
+														interactionResult.pass
+															? "text-green-400"
+															: "text-red-400"
 													}
 												>
-													{result.pass ? "PASS" : "FAIL"} &middot;{" "}
-													{result.framesObserved} frames
+													{interactionResult.pass ? "PASS" : "FAIL"} &middot;{" "}
+													{interactionResult.framesObserved} frames
 												</span>
 											)}
-											{result && evalRun.type === "judge" && (
+											{judgeResult && (
 												<div className="text-xs text-gray-400 space-y-1">
 													<div>
-														Genre: {result.genreMatch}/5 &middot; Mechanic:{" "}
-														{result.mechanicMatch}/5 &middot; Controls:{" "}
-														{result.controlsMatch}/5
+														Genre: {judgeResult.genreMatch}/5 &middot; Mechanic:{" "}
+														{judgeResult.mechanicMatch}/5 &middot; Controls:{" "}
+														{judgeResult.controlsMatch}/5
 													</div>
-													{result.summary && <div>{result.summary}</div>}
+													<div>{judgeResult.summary}</div>
 												</div>
 											)}
 										</div>
@@ -234,7 +244,6 @@ export default function GenerationPage({
 						</div>
 					)}
 
-					{/* Mechanic Code */}
 					{generation.mechanicCode && (
 						<div className="bg-gray-900 border border-gray-800 rounded-lg">
 							<button
@@ -254,10 +263,14 @@ export default function GenerationPage({
 						</div>
 					)}
 
-					{/* Error */}
 					{generation.error && (
 						<div className="bg-red-950 border border-red-800 rounded-lg p-3">
 							<h3 className="font-medium text-red-400 mb-1">Error</h3>
+							{failureStage && (
+								<p className="text-xs text-red-400 mb-2">
+									Failed during {failureStage}.
+								</p>
+							)}
 							<p className="text-sm text-red-300">{generation.error}</p>
 						</div>
 					)}
