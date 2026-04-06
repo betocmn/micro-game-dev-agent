@@ -4,12 +4,14 @@ import {
 	evaluateRunResponseSchema,
 	generateRunRequestSchema,
 	generateRunResponseSchema,
+	materializeRunResponseSchema,
 } from "@/lib/schemas";
 import { HarnessStageError, isGenerationFailureStage } from "./errors";
 
 const DEFAULT_HARNESS_WORKER_URL = "http://127.0.0.1:3200";
 
 export type HarnessGenerateRequest = z.infer<typeof generateRunRequestSchema>;
+export type HarnessMaterializeRequest = z.infer<typeof generateRunRequestSchema>;
 export type HarnessEvaluateRequest = z.infer<typeof evaluateRunRequestSchema>;
 
 export function resolveHarnessWorkerUrl(explicitUrl?: string): string {
@@ -88,6 +90,22 @@ export async function runHarnessWorker(
 		"/runs/generate",
 		payload,
 		generateRunResponseSchema,
+		options,
+	);
+}
+
+export async function runHarnessMaterialization(
+	request: HarnessMaterializeRequest,
+	options: {
+		fetchImpl?: typeof fetch;
+		url?: string;
+	} = {},
+) {
+	const payload = generateRunRequestSchema.parse(request);
+	return postJson(
+		"/runs/materialize",
+		payload,
+		materializeRunResponseSchema,
 		options,
 	);
 }

@@ -7,12 +7,18 @@ import {
 } from "@anthropic-ai/claude-agent-sdk";
 import { runRobloxEvals } from "@/evals/robloxRunEvals";
 import { ensureLocalEnvLoaded } from "@/lib/loadEnv";
-import { generateRunResponseSchema } from "@/lib/schemas";
+import {
+	evaluateRunResponseSchema,
+	generateRunResponseSchema,
+	materializeRunResponseSchema,
+} from "@/lib/schemas";
 import type {
 	AgentEventSummary,
 	AgentRunSummary,
+	EvaluateRunResponse,
 	GenerateRunResponse,
 	GenerationFailureStage,
+	MaterializeRunResponse,
 	RobloxEvalSuiteResult,
 	RobloxGameSpec,
 } from "@/types";
@@ -24,8 +30,10 @@ import {
 } from "./fallback";
 import { robloxGameSpecJsonSchema } from "./jsonSchemas";
 import {
+	assertWorkspaceExists,
 	createRunWorkspace,
 	getFixedScaffoldChecksum,
+	getRunWorkspacePaths,
 	getTemplateBundle,
 	loadArtifactBundle,
 	writeSpecToWorkspace,
@@ -512,14 +520,43 @@ export async function generateRobloxRun(
 		runQuery?: QueryFunction;
 	} = {},
 ): Promise<GenerateRunResponse> {
+	const materializedRun = await materializeRobloxRun(request, dependencies);
+	const evaluatedRun = await evaluateRobloxRun(
+		{
+			generationId: request.generationId,
+			prompt: request.prompt,
+			spec: materializedRun.spec,
+			artifactBundle: materializedRun.artifactBundle,
+			resumeSessionId: materializedRun.resumeSessionId,
+		},
+		dependencies,
+	);
+
+	return generateRunResponseSchema.parse({
+		spec: materializedRun.spec,
+		artifactBundle: evaluatedRun.artifactBundle,
+		agentRun: evaluatedRun.agentRun ?? materializedRun.agentRun,
+		evalSuite: evaluatedRun.evalSuite,
+		events: collectEvents(materializedRun.events, evaluatedRun.events),
+	});
+}
+
+export async function materializeRobloxRun(
+	request: {
+		generationId: string;
+		prompt: string;
+		referenceImageUrl?: string | null;
+	},
+	dependencies: {
+		runQuery?: QueryFunction;
+	} = {},
+): Promise<MaterializeRunResponse> {
 	let failureStage: GenerationFailureStage = "setup";
 
 	try {
 		const apiKey = ensureAnthropicApiKey();
 		const runQuery = dependencies.runQuery ?? query;
 		const { workspaceDir } = await createRunWorkspace(request.generationId);
-		const templateBundle = await getTemplateBundle();
-		const expectedScaffoldChecksum = getFixedScaffoldChecksum(templateBundle);
 		const fallbackEvents: AgentEventSummary[] = [];
 
 		failureStage = "expanding";
@@ -558,76 +595,118 @@ export async function generateRobloxRun(
 			await buildFallbackProject(workspaceDir, spec);
 		}
 
-		failureStage = "evaluating";
-		let { artifactBundle, evalSuite } = await evaluateBundle(
-			apiKey,
-			request.prompt,
-			spec,
-			workspaceDir,
-			expectedScaffoldChecksum,
-		);
-		let agentRun = getPreferredAgentRun(
-			request.generationId,
-			[buildRun, specRun],
-			"builder",
-		);
-		let events = collectEvents(
-			specRun?.events,
-			buildRun?.events,
-			fallbackEvents,
-		);
+		const artifactBundle = await loadArtifactBundle(workspaceDir);
 
-		if (!evalSuite.artifact.pass || !evalSuite.roblox.pass) {
-			failureStage = "building";
-			let repairRun: QueryRunResult | null = null;
-			try {
-				repairRun = await materializeProject(
-					apiKey,
-					request.prompt,
-					spec,
-					workspaceDir,
-					runQuery,
-					buildRun?.agentRun.sessionId,
-					evalSuite,
-				);
-			} catch (error) {
-				fallbackEvents.push(createFallbackEvent("repair", error));
-				await buildFallbackProject(workspaceDir, spec);
-			}
-
-			failureStage = "evaluating";
-			({ artifactBundle, evalSuite } = await evaluateBundle(
-				apiKey,
-				request.prompt,
-				spec,
-				workspaceDir,
-				expectedScaffoldChecksum,
-			));
-			agentRun = getPreferredAgentRun(
-				request.generationId,
-				[repairRun, buildRun, specRun],
-				"repair",
-			);
-			events = collectEvents(
-				specRun?.events,
-				buildRun?.events,
-				repairRun?.events,
-				fallbackEvents,
-			);
-		}
-
-		return generateRunResponseSchema.parse({
+		return materializeRunResponseSchema.parse({
 			spec,
 			artifactBundle: {
 				...artifactBundle,
 				artifactType: ARTIFACT_TYPE,
 				scaffoldVersion: HARNESS_VERSION,
 			},
-			agentRun,
+			agentRun: getPreferredAgentRun(
+				request.generationId,
+				[buildRun, specRun],
+				"builder",
+			),
+			events: collectEvents(specRun?.events, buildRun?.events, fallbackEvents),
+			resumeSessionId: buildRun?.agentRun.sessionId ?? null,
+		});
+	} catch (error) {
+		throw toHarnessStageError(failureStage, error);
+	}
+}
+
+export async function evaluateRobloxRun(
+	request: {
+		generationId: string;
+		prompt: string;
+		spec: RobloxGameSpec;
+		artifactBundle: MaterializeRunResponse["artifactBundle"];
+		resumeSessionId?: string | null;
+	},
+	dependencies: {
+		runQuery?: QueryFunction;
+	} = {},
+): Promise<EvaluateRunResponse> {
+	let failureStage: GenerationFailureStage = "setup";
+
+	try {
+		const apiKey = ensureAnthropicApiKey();
+		const runQuery = dependencies.runQuery ?? query;
+		const templateBundle = await getTemplateBundle();
+		const expectedScaffoldChecksum = getFixedScaffoldChecksum(templateBundle);
+		const { workspaceDir } = getRunWorkspacePaths(request.generationId);
+		const fallbackEvents: AgentEventSummary[] = [];
+		let artifactBundle = request.artifactBundle;
+		let workspaceAvailable = false;
+
+		try {
+			await assertWorkspaceExists(workspaceDir);
+			artifactBundle = await loadArtifactBundle(workspaceDir);
+			workspaceAvailable = true;
+		} catch {
+			workspaceAvailable = false;
+		}
+
+		failureStage = "evaluating";
+		let evalSuite = await runRobloxEvals(
+			apiKey,
+			request.prompt,
+			request.spec,
+			artifactBundle,
+			expectedScaffoldChecksum,
+		);
+
+		let repairRun: QueryRunResult | null = null;
+		const shouldRepair =
+			workspaceAvailable &&
+			(!evalSuite.artifact.pass || !evalSuite.roblox.pass);
+
+		if (shouldRepair) {
+			failureStage = "building";
+			try {
+				repairRun = await materializeProject(
+					apiKey,
+					request.prompt,
+					request.spec,
+					workspaceDir,
+					runQuery,
+					request.resumeSessionId ?? undefined,
+					evalSuite,
+				);
+			} catch (error) {
+				fallbackEvents.push(createFallbackEvent("repair", error));
+				await buildFallbackProject(workspaceDir, request.spec);
+			}
+
+			failureStage = "evaluating";
+			({ artifactBundle, evalSuite } = await evaluateBundle(
+				apiKey,
+				request.prompt,
+				request.spec,
+				workspaceDir,
+				expectedScaffoldChecksum,
+			));
+		}
+
+		return evaluateRunResponseSchema.parse({
+			artifactBundle: {
+				...artifactBundle,
+				artifactType: ARTIFACT_TYPE,
+				scaffoldVersion: HARNESS_VERSION,
+			},
 			evalSuite,
-			events,
-			artifactType: ARTIFACT_TYPE,
-			evalProfile: EVAL_PROFILE,
+			agentRun: shouldRepair
+				? getPreferredAgentRun(
+						request.generationId,
+						[repairRun],
+						"repair",
+					)
+				: null,
+			events: shouldRepair
+				? collectEvents(repairRun?.events, fallbackEvents)
+				: [],
 		});
 	} catch (error) {
 		throw toHarnessStageError(failureStage, error);

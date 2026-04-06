@@ -22,7 +22,8 @@ Convex
   convex/generations.ts
   convex/schema.ts
   |
-  | POST /runs/generate
+  | POST /runs/materialize
+  | POST /runs/evaluate
   v
 harness worker
   src/worker/server.ts
@@ -56,6 +57,7 @@ prompt
   -> status = building
   -> builder edits scaffold or fallback builder writes deterministic files
   -> status = evaluating
+  -> artifact bundle is persisted for inspection
   -> artifact + roblox + judge evals run in the worker
   -> Convex persists bundle, trace, and eval rows
   -> status = done or failed
@@ -103,6 +105,7 @@ Owns:
 
 Endpoints:
 
+- `POST /runs/materialize`
 - `POST /runs/generate`
 - `POST /runs/evaluate`
 

@@ -5,7 +5,10 @@ import type {
 } from "../src/types";
 import { EVAL_PROFILE, HARNESS_VERSION } from "../src/worker/constants";
 import { HarnessStageError } from "../src/worker/errors";
-import { runHarnessWorker } from "../src/worker/workerClient";
+import {
+	runHarnessEvaluation,
+	runHarnessMaterialization,
+} from "../src/worker/workerClient";
 import { internal } from "./_generated/api";
 import {
 	internalAction,
@@ -245,76 +248,121 @@ export const runPipeline = internalAction({
 				fields: { status: "building" },
 			});
 
-			const workerResult = await runHarnessWorker({
+			const materializeResult = await runHarnessMaterialization({
 				generationId,
 				prompt: generation.prompt,
 			});
-			failureStage = "evaluating";
-			await ctx.runMutation(internal.generations.updateGeneration, {
-				generationId,
-				fields: { status: "evaluating" },
-			});
-			const agentRunId = await ctx.runMutation(
+			const materializeAgentRunId = await ctx.runMutation(
 				internal.generations.saveAgentRun,
 				{
 					generationId,
-					sessionId: workerResult.agentRun.sessionId,
+					sessionId: materializeResult.agentRun.sessionId,
 					status: "done",
-					model: workerResult.agentRun.model,
-					numTurns: workerResult.agentRun.numTurns,
-					totalCostUsd: workerResult.agentRun.totalCostUsd,
-					stopReason: workerResult.agentRun.stopReason ?? undefined,
-					permissionDenials: workerResult.agentRun.permissionDenials,
+					model: materializeResult.agentRun.model,
+					numTurns: materializeResult.agentRun.numTurns,
+					totalCostUsd: materializeResult.agentRun.totalCostUsd,
+					stopReason: materializeResult.agentRun.stopReason ?? undefined,
+					permissionDenials: materializeResult.agentRun.permissionDenials,
 					harnessVersion: HARNESS_VERSION,
 					evalProfile: EVAL_PROFILE,
 				},
 			);
 			await ctx.runMutation(internal.generations.saveAgentEvents, {
 				generationId,
-				agentRunId,
-				events: workerResult.events.map((event) => ({
+				agentRunId: materializeAgentRunId,
+				events: materializeResult.events.map((event) => ({
 					type: event.type,
 					summary: event.summary,
 					payload: event.payload,
 				})),
 			});
 
+			failureStage = "evaluating";
+			await ctx.runMutation(internal.generations.updateGeneration, {
+				generationId,
+				fields: {
+					status: "evaluating",
+					spec: JSON.stringify(materializeResult.spec),
+					artifactType: "roblox-rojo",
+					artifactBundle: JSON.stringify(materializeResult.artifactBundle),
+					harnessVersion: HARNESS_VERSION,
+					evalProfile: EVAL_PROFILE,
+					latestAgentRunId: materializeAgentRunId,
+				},
+			});
+
+			const evaluationResult = await runHarnessEvaluation({
+				generationId,
+				prompt: generation.prompt,
+				spec: materializeResult.spec,
+				artifactBundle: materializeResult.artifactBundle,
+				resumeSessionId: materializeResult.resumeSessionId ?? undefined,
+			});
+
+			let latestAgentRunId = materializeAgentRunId;
+			if (evaluationResult.agentRun) {
+				latestAgentRunId = await ctx.runMutation(
+					internal.generations.saveAgentRun,
+					{
+						generationId,
+						sessionId: evaluationResult.agentRun.sessionId,
+						status: "done",
+						model: evaluationResult.agentRun.model,
+						numTurns: evaluationResult.agentRun.numTurns,
+						totalCostUsd: evaluationResult.agentRun.totalCostUsd,
+						stopReason: evaluationResult.agentRun.stopReason ?? undefined,
+						permissionDenials: evaluationResult.agentRun.permissionDenials,
+						harnessVersion: HARNESS_VERSION,
+						evalProfile: EVAL_PROFILE,
+					},
+				);
+				await ctx.runMutation(internal.generations.saveAgentEvents, {
+					generationId,
+					agentRunId: latestAgentRunId,
+					events: evaluationResult.events.map((event) => ({
+						type: event.type,
+						summary: event.summary,
+						payload: event.payload,
+					})),
+				});
+			}
+
 			await ctx.runMutation(internal.generations.saveEvalResult, {
 				generationId,
-				agentRunId,
+				agentRunId: latestAgentRunId,
 				type: "artifact",
 				status: "done",
-				result: JSON.stringify(workerResult.evalSuite.artifact),
+				result: JSON.stringify(evaluationResult.evalSuite.artifact),
 			});
 			await ctx.runMutation(internal.generations.saveEvalResult, {
 				generationId,
-				agentRunId,
+				agentRunId: latestAgentRunId,
 				type: "roblox",
 				status: "done",
-				result: JSON.stringify(workerResult.evalSuite.roblox),
+				result: JSON.stringify(evaluationResult.evalSuite.roblox),
 			});
 			await ctx.runMutation(internal.generations.saveEvalResult, {
 				generationId,
-				agentRunId,
+				agentRunId: latestAgentRunId,
 				type: "judge",
 				status: "done",
-				result: JSON.stringify(workerResult.evalSuite.judge),
+				result: JSON.stringify(evaluationResult.evalSuite.judge),
 			});
 
 			await ctx.runMutation(internal.generations.updateGeneration, {
 				generationId,
 				fields: {
 					status: "done",
-					spec: JSON.stringify(workerResult.spec),
+					spec: JSON.stringify(materializeResult.spec),
 					artifactType: "roblox-rojo",
-					artifactBundle: JSON.stringify(workerResult.artifactBundle),
+					artifactBundle: JSON.stringify(evaluationResult.artifactBundle),
 					harnessVersion: HARNESS_VERSION,
 					evalProfile: EVAL_PROFILE,
-					latestAgentRunId: agentRunId,
-					summaryScore: workerResult.evalSuite.summaryScore,
-					artifactPass: workerResult.evalSuite.artifact.pass,
-					robloxPass: workerResult.evalSuite.roblox.pass,
-					judgeScore: getJudgeScore(workerResult.evalSuite),
+					latestAgentRunId,
+					summaryScore: evaluationResult.evalSuite.summaryScore,
+					artifactPass: evaluationResult.evalSuite.artifact.pass,
+					robloxPass: evaluationResult.evalSuite.roblox.pass,
+					judgeScore: getJudgeScore(evaluationResult.evalSuite),
 				},
 			});
 		} catch (error) {

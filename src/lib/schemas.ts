@@ -14,6 +14,7 @@ import type {
 	GenerateRunResponse,
 	InteractionEvalResult,
 	JudgeEvalResult,
+	MaterializeRunResponse,
 	RobloxEvalResult,
 	RobloxEvalSuiteResult,
 	RobloxGameSpec,
@@ -211,16 +212,29 @@ export const generateRunResponseSchema: z.ZodType<GenerateRunResponse> =
 		events: z.array(agentEventSummarySchema),
 	});
 
+export const materializeRunResponseSchema: z.ZodType<MaterializeRunResponse> =
+	z.object({
+		spec: robloxGameSpecSchema,
+		artifactBundle: artifactBundleSchema,
+		agentRun: agentRunSummarySchema,
+		events: z.array(agentEventSummarySchema),
+		resumeSessionId: z.string().nullable().optional(),
+	});
+
 export const evaluateRunRequestSchema: z.ZodType<EvaluateRunRequest> = z.object(
 	{
 		generationId: z.string().min(1),
 		prompt: z.string().min(1),
 		spec: robloxGameSpecSchema,
 		artifactBundle: artifactBundleSchema,
+		resumeSessionId: z.string().min(1).nullable().optional(),
 	},
 );
 
 export const evaluateRunResponseSchema: z.ZodType<EvaluateRunResponse> =
 	z.object({
+		artifactBundle: artifactBundleSchema,
 		evalSuite: robloxEvalSuiteResultSchema,
+		agentRun: agentRunSummarySchema.nullable().optional(),
+		events: z.array(agentEventSummarySchema),
 	});

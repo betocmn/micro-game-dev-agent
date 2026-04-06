@@ -107,6 +107,14 @@ export interface GenerateRunRequest {
 	referenceImageUrl?: string | null;
 }
 
+export interface MaterializeRunResponse {
+	spec: RobloxGameSpec;
+	artifactBundle: ArtifactBundle;
+	agentRun: AgentRunSummary;
+	events: AgentEventSummary[];
+	resumeSessionId?: string | null;
+}
+
 export interface GenerateRunResponse {
 	spec: RobloxGameSpec;
 	artifactBundle: ArtifactBundle;
@@ -120,10 +128,14 @@ export interface EvaluateRunRequest {
 	prompt: string;
 	spec: RobloxGameSpec;
 	artifactBundle: ArtifactBundle;
+	resumeSessionId?: string | null;
 }
 
 export interface EvaluateRunResponse {
+	artifactBundle: ArtifactBundle;
 	evalSuite: RobloxEvalSuiteResult;
+	agentRun?: AgentRunSummary | null;
+	events: AgentEventSummary[];
 }
 
 export interface GameSpec {

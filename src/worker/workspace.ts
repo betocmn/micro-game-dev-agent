@@ -27,11 +27,18 @@ export interface RunWorkspace {
 	workspaceDir: string;
 }
 
+export function getRunWorkspacePaths(generationId: string): RunWorkspace {
+	const runDir = resolveRunDir(RUNS_DIR, generationId);
+	return {
+		runDir,
+		workspaceDir: path.join(runDir, "workspace"),
+	};
+}
+
 export async function createRunWorkspace(
 	generationId: string,
 ): Promise<RunWorkspace> {
-	const runDir = resolveRunDir(RUNS_DIR, generationId);
-	const workspaceDir = path.join(runDir, "workspace");
+	const { runDir, workspaceDir } = getRunWorkspacePaths(generationId);
 
 	await rm(runDir, { force: true, recursive: true });
 	await mkdir(runDir, { recursive: true });

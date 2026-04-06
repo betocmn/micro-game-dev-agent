@@ -1,15 +1,18 @@
 import type { ServerResponse } from "node:http";
 import { createServer } from "node:http";
-import { runRobloxEvals } from "@/evals/robloxRunEvals";
 import { ensureLocalEnvLoaded } from "@/lib/loadEnv";
 import {
 	evaluateRunRequestSchema,
 	evaluateRunResponseSchema,
 	generateRunRequestSchema,
+	materializeRunResponseSchema,
 } from "@/lib/schemas";
 import { HarnessStageError } from "./errors";
-import { generateRobloxRun } from "./harness";
-import { getFixedScaffoldChecksum, getTemplateBundle } from "./workspace";
+import {
+	evaluateRobloxRun,
+	generateRobloxRun,
+	materializeRobloxRun,
+} from "./harness";
 
 ensureLocalEnvLoaded();
 
@@ -33,6 +36,28 @@ export function startWorkerServer(
 	port = Number(process.env.HARNESS_WORKER_PORT ?? DEFAULT_PORT),
 ) {
 	const server = createServer(async (request, response) => {
+		if (request.method === "POST" && request.url === "/runs/materialize") {
+			try {
+				const body = await readJsonBody(request);
+				const payload = generateRunRequestSchema.parse(body);
+				const result = await materializeRobloxRun(payload);
+				sendJson(response, 200, materializeRunResponseSchema.parse(result));
+			} catch (error) {
+				const message =
+					error instanceof Error
+						? error.message
+						: "Unknown materialization error";
+				sendJson(
+					response,
+					400,
+					error instanceof HarnessStageError
+						? { error: message, failureStage: error.failureStage }
+						: { error: message },
+				);
+			}
+			return;
+		}
+
 		if (request.method === "POST" && request.url === "/runs/generate") {
 			try {
 				const body = await readJsonBody(request);
@@ -57,31 +82,18 @@ export function startWorkerServer(
 			try {
 				const body = await readJsonBody(request);
 				const payload = evaluateRunRequestSchema.parse(body);
-				const apiKey = process.env.ANTHROPIC_API_KEY;
-				if (!apiKey) {
-					throw new Error(
-						"ANTHROPIC_API_KEY is not configured for the harness worker.",
-					);
-				}
-				const templateBundle = await getTemplateBundle();
-				const evalSuite = await runRobloxEvals(
-					apiKey,
-					payload.prompt,
-					payload.spec,
-					payload.artifactBundle,
-					getFixedScaffoldChecksum(templateBundle),
-				);
-				sendJson(
-					response,
-					200,
-					evaluateRunResponseSchema.parse({
-						evalSuite,
-					}),
-				);
+				const result = await evaluateRobloxRun(payload);
+				sendJson(response, 200, evaluateRunResponseSchema.parse(result));
 			} catch (error) {
 				const message =
 					error instanceof Error ? error.message : "Unknown evaluation error";
-				sendJson(response, 400, { error: message });
+				sendJson(
+					response,
+					400,
+					error instanceof HarnessStageError
+						? { error: message, failureStage: error.failureStage }
+						: { error: message },
+				);
 			}
 			return;
 		}

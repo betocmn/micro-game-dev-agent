@@ -18,14 +18,15 @@ The important point is not "one model call." The important point is that every s
 
 ## Live entry point
 
-The harness entry point is `generateRobloxRun()` in `src/worker/harness.ts`.
+The direct combined harness entry point is `generateRobloxRun()` in `src/worker/harness.ts`.
 
 Convex calls it indirectly through the local worker:
 
 ```text
 convex/generations.ts
   -> src/worker/workerClient.ts
-  -> POST /runs/generate
+  -> POST /runs/materialize
+  -> POST /runs/evaluate
   -> src/worker/server.ts
   -> src/worker/harness.ts
 ```

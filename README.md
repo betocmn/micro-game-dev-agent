@@ -23,12 +23,13 @@ The old HTML5 canvas pipeline remains in the repo as legacy reference only. It i
 ## Live flow
 
 1. `enqueueGeneration()` inserts a generation row in Convex.
-2. Convex calls the local worker at `POST /runs/generate`.
+2. Convex calls the local worker at `POST /runs/materialize`.
 3. The worker creates `.context/runs/<generationId>/workspace` from the fixed scaffold.
 4. Claude Agent SDK plans a `RobloxGameSpec`, edits the allowed files, and records session metadata.
-5. Proxy evals score scaffold correctness and Roblox/social-fit heuristics.
-6. Convex persists the artifact bundle, agent run, agent events, and eval rows.
-7. The UI shows the file tree, trace summary, and benchmark score.
+5. Convex persists the initial artifact bundle plus the materialization trace, then calls `POST /runs/evaluate`.
+6. Proxy evals score scaffold correctness and Roblox/social-fit heuristics, including a repair pass when needed.
+7. Convex persists the final artifact bundle, agent runs, agent events, and eval rows.
+8. The UI shows the file tree, trace summary, and benchmark score.
 
 ## Fixed scaffold
 
