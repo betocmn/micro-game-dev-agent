@@ -1,6 +1,6 @@
 # Running The Worker
 
-This is the practical runbook for the Anthropic-native Roblox worker.
+This is the practical runbook for the Roblox worker that uses Anthropic Agent SDK for authoring and OpenRouter GPT for judge evals.
 
 ## Required env
 
@@ -8,9 +8,12 @@ Set these in `.env.local`:
 
 - `NEXT_PUBLIC_CONVEX_URL`
 - `ANTHROPIC_API_KEY`
+- `OPENROUTER_API_KEY`
 
 Optional:
 
+- `OPENROUTER_JUDGE_MODEL`
+  Defaults to `openai/gpt-5-mini`.
 - `HARNESS_WORKER_URL`
 
 As of April 4, 2026, the worker, benchmark CLI, and direct harness entry point all load `.env.local` automatically through `@next/env`.
@@ -67,16 +70,15 @@ then the run completed through deterministic recovery rather than Claude-authore
 
 That is still a valid run. It means the harness contract worked and the fallback path preserved availability.
 
-## Verified behavior
+## Current behavior
 
-Verified on April 4, 2026 with a real `ANTHROPIC_API_KEY`:
+As of April 6, 2026, the worker codepath is wired so that:
 
-- direct `generateRobloxRun()` completed successfully
-- `POST /runs/generate` completed successfully
-- the `mall hang vibes` smoke test passed `artifact` and `roblox` evals
-- the current planner and builder timed out on that short prompt, so the run used deterministic fallback files
-
-The response still persisted a valid Roblox scaffold, trace events, and eval output. That is the current expected MVP behavior.
+- planner, builder, and repair use `ANTHROPIC_API_KEY`
+- the Roblox judge uses `OPENROUTER_API_KEY`
+- `OPENROUTER_JUDGE_MODEL` defaults to `openai/gpt-5-mini`
+- a missing OpenRouter judge key fails the request in the `evaluating` stage
+- judge provider failures fall back to the deterministic heuristic score instead of aborting the run
 
 ## Run benchmarks
 
@@ -102,9 +104,10 @@ Use benchmark output to compare harness changes by:
 Check these in order:
 
 1. `ANTHROPIC_API_KEY` is present in `.env.local`
-2. the worker process started from the repo root
-3. `.context/runs/<generationId>/workspace` exists
-4. the response contains fallback events
-5. `artifact` and `roblox` eval notes explain the failure
+2. `OPENROUTER_API_KEY` is present in `.env.local`
+3. the worker process started from the repo root
+4. `.context/runs/<generationId>/workspace` exists
+5. the response contains fallback events
+6. `artifact` and `roblox` eval notes explain the failure
 
 If the worker completes but always falls back, the next problem is steerability, not plumbing.
