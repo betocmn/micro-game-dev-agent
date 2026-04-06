@@ -12,6 +12,7 @@ import {
 	generateRunResponseSchema,
 	materializeRunResponseSchema,
 } from "@/lib/schemas";
+import { isPathWithinDirectory } from "@/lib/runId";
 import type {
 	AgentEventSummary,
 	AgentRunSummary,
@@ -224,7 +225,7 @@ function pathViolatesPolicy(
 			if (value.includes("..")) {
 				return `Path traversal is blocked: ${value}`;
 			}
-			if (value.startsWith("/") && !value.startsWith(workspaceDir)) {
+			if (value.startsWith("/") && !isPathWithinDirectory(workspaceDir, value)) {
 				return `Path ${value} is outside the allowed workspace.`;
 			}
 		}

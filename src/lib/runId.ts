@@ -25,7 +25,7 @@ export function assertValidRunId(value: string): string {
 export function resolveRunDir(rootDir: string, generationId: string): string {
 	const safeGenerationId = assertValidRunId(generationId);
 	const runDir = path.resolve(rootDir, safeGenerationId);
-	const relativeRunDir = path.relative(rootDir, runDir);
+	const relativeRunDir = path.relative(path.resolve(rootDir), runDir);
 
 	if (
 		relativeRunDir.length === 0 ||
@@ -36,4 +36,19 @@ export function resolveRunDir(rootDir: string, generationId: string): string {
 	}
 
 	return runDir;
+}
+
+export function isPathWithinDirectory(
+	rootDir: string,
+	candidatePath: string,
+): boolean {
+	const relativePath = path.relative(
+		path.resolve(rootDir),
+		path.resolve(candidatePath),
+	);
+
+	return (
+		relativePath.length === 0 ||
+		(!relativePath.startsWith("..") && !path.isAbsolute(relativePath))
+	);
 }

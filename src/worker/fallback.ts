@@ -43,6 +43,14 @@ function buildTitle(prompt: string, experienceType: RobloxExperienceType) {
 	}
 }
 
+export function escapeLuauString(value: string): string {
+	return value
+		.replaceAll("\\", "\\\\")
+		.replaceAll("\r", "\\r")
+		.replaceAll("\n", "\\n")
+		.replaceAll('"', '\\"');
+}
+
 export function deriveRobloxSpecFromPrompt(prompt: string): RobloxGameSpec {
 	const experienceType = inferExperienceType(prompt);
 
@@ -92,6 +100,9 @@ export function deriveRobloxSpecFromPrompt(prompt: string): RobloxGameSpec {
 }
 
 function renderServerScript(spec: RobloxGameSpec) {
+	const escapedTitle = escapeLuauString(spec.title);
+	const escapedSocialLoop = escapeLuauString(spec.socialLoop);
+
 	return `local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -155,8 +166,8 @@ function MechanicServer.start()
 \treturn {
 \t\tstatus = "ready",
 \t\tcontractVersion = MechanicContract.version,
-\t\texperienceTitle = "${spec.title}",
-\t\tprimaryLoop = "${spec.socialLoop}",
+\t\texperienceTitle = "${escapedTitle}",
+\t\tprimaryLoop = "${escapedSocialLoop}",
 \t}
 end
 
@@ -165,7 +176,9 @@ return MechanicServer
 }
 
 function renderClientScript(spec: RobloxGameSpec) {
-	const prompt = spec.clientFeedback[0] ?? "Stay near friends to earn rewards.";
+	const prompt = escapeLuauString(
+		spec.clientFeedback[0] ?? "Stay near friends to earn rewards.",
+	);
 	return `local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 

@@ -1,23 +1,15 @@
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import {
+	calculateBenchmarkSummary,
+	type BenchmarkCaseResult,
+} from "@/benchmark/benchmarkReport";
 import dataset from "@/evals/datasets/roblox-social-v1.json";
 import { ensureLocalEnvLoaded } from "@/lib/loadEnv";
 import type { RobloxEvalSuiteResult } from "@/types";
 import { generateRobloxRun } from "@/worker/harness";
 
 ensureLocalEnvLoaded();
-
-interface BenchmarkCaseResult {
-	id: string;
-	prompt: string;
-	focus: string;
-	score?: number;
-	artifactPass?: boolean;
-	robloxPass?: boolean;
-	judgeScore?: number;
-	sessionId?: string;
-	error?: string;
-}
 
 interface BenchmarkReport {
 	generatedAt: string;
@@ -103,27 +95,7 @@ async function main() {
 		}
 	}
 
-	const successfulCases = caseResults.filter(
-		(result): result is BenchmarkCaseResult & { score: number } =>
-			typeof result.score === "number",
-	);
-	const averageScore =
-		successfulCases.length > 0
-			? Math.round(
-					successfulCases.reduce((sum, result) => sum + result.score, 0) /
-						successfulCases.length,
-				)
-			: 0;
-	const passRate =
-		successfulCases.length > 0
-			? Number(
-					(
-						successfulCases.filter(
-							(result) => result.robloxPass && result.artifactPass,
-						).length / successfulCases.length
-					).toFixed(2),
-				)
-			: 0;
+	const { averageScore, passRate } = calculateBenchmarkSummary(caseResults);
 
 	const previousReport = await readPreviousBenchmark(dataset.evalProfile);
 	const report: BenchmarkReport = {
