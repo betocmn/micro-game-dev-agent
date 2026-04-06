@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { HarnessStageError } from "./errors";
 import {
 	resolveHarnessWorkerUrl,
@@ -40,6 +40,10 @@ const validArtifactBundle = {
 };
 
 describe("workerClient", () => {
+	afterEach(() => {
+		vi.restoreAllMocks();
+	});
+
 	it("prefers the explicit worker URL", () => {
 		expect(resolveHarnessWorkerUrl("https://worker.test")).toBe(
 			"https://worker.test",
@@ -47,6 +51,7 @@ describe("workerClient", () => {
 	});
 
 	it("posts generate requests and returns parsed results", async () => {
+		const timeoutSpy = vi.spyOn(AbortSignal, "timeout");
 		const fetchImpl = vi.fn().mockResolvedValue({
 			ok: true,
 			json: async () => ({
@@ -106,9 +111,11 @@ describe("workerClient", () => {
 
 		expect(result.evalSuite.summaryScore).toBe(100);
 		expect(fetchImpl).toHaveBeenCalledOnce();
+		expect(timeoutSpy).toHaveBeenCalledWith(180000);
 	});
 
 	it("posts materialize requests and returns parsed results", async () => {
+		const timeoutSpy = vi.spyOn(AbortSignal, "timeout");
 		const fetchImpl = vi.fn().mockResolvedValue({
 			ok: true,
 			json: async () => ({
@@ -140,9 +147,11 @@ describe("workerClient", () => {
 
 		expect(result.resumeSessionId).toBe("session-1");
 		expect(fetchImpl).toHaveBeenCalledOnce();
+		expect(timeoutSpy).toHaveBeenCalledWith(120000);
 	});
 
 	it("posts evaluation requests and returns parsed results", async () => {
+		const timeoutSpy = vi.spyOn(AbortSignal, "timeout");
 		const fetchImpl = vi.fn().mockResolvedValue({
 			ok: true,
 			json: async () => ({
@@ -197,6 +206,7 @@ describe("workerClient", () => {
 
 		expect(result.artifactBundle.files).toHaveLength(1);
 		expect(fetchImpl).toHaveBeenCalledOnce();
+		expect(timeoutSpy).toHaveBeenCalledWith(120000);
 	});
 
 	it("surfaces worker failure stages from error responses", async () => {

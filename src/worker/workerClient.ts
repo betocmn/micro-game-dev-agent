@@ -9,6 +9,8 @@ import {
 import { HarnessStageError, isGenerationFailureStage } from "./errors";
 
 const DEFAULT_HARNESS_WORKER_URL = "http://127.0.0.1:3200";
+const DEFAULT_REQUEST_TIMEOUT_MS = 120000;
+const GENERATE_REQUEST_TIMEOUT_MS = 180000;
 
 export type HarnessGenerateRequest = z.infer<typeof generateRunRequestSchema>;
 export type HarnessMaterializeRequest = z.infer<
@@ -28,6 +30,7 @@ async function postJson<T>(
 	schema: z.ZodType<T>,
 	options: {
 		fetchImpl?: typeof fetch;
+		timeoutMs?: number;
 		url?: string;
 	},
 ): Promise<T> {
@@ -40,7 +43,9 @@ async function postJson<T>(
 				"Content-Type": "application/json",
 			},
 			body: JSON.stringify(payload),
-			signal: AbortSignal.timeout(120000),
+			signal: AbortSignal.timeout(
+				options.timeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS,
+			),
 		},
 	);
 
@@ -88,12 +93,10 @@ export async function runHarnessWorker(
 	} = {},
 ) {
 	const payload = generateRunRequestSchema.parse(request);
-	return postJson(
-		"/runs/generate",
-		payload,
-		generateRunResponseSchema,
-		options,
-	);
+	return postJson("/runs/generate", payload, generateRunResponseSchema, {
+		...options,
+		timeoutMs: GENERATE_REQUEST_TIMEOUT_MS,
+	});
 }
 
 export async function runHarnessMaterialization(
