@@ -19,7 +19,6 @@ export default defineSchema({
 			v.literal("queued"),
 			v.literal("expanding"),
 			v.literal("building"),
-			v.literal("compiling"),
 			v.literal("evaluating"),
 			v.literal("done"),
 			v.literal("failed"),
@@ -29,25 +28,60 @@ export default defineSchema({
 				v.literal("setup"),
 				v.literal("expanding"),
 				v.literal("building"),
-				v.literal("compiling"),
 				v.literal("evaluating"),
 			),
 		),
 		spec: v.optional(v.string()), // JSON stringified GameSpec
 		mechanicCode: v.optional(v.string()),
 		html: v.optional(v.string()),
+		artifactType: v.optional(v.literal("roblox-rojo")),
+		artifactBundle: v.optional(v.string()),
+		harnessVersion: v.optional(v.string()),
+		evalProfile: v.optional(v.string()),
+		attemptCount: v.optional(v.float64()),
+		latestAgentRunId: v.optional(v.id("agentRuns")),
 		summaryScore: v.optional(v.float64()),
+		artifactPass: v.optional(v.boolean()),
+		robloxPass: v.optional(v.boolean()),
 		runtimePass: v.optional(v.boolean()),
 		interactionPass: v.optional(v.boolean()),
 		judgeScore: v.optional(v.float64()),
 		error: v.optional(v.string()),
 	}),
 
+	agentRuns: defineTable({
+		generationId: v.id("generations"),
+		sessionId: v.string(),
+		status: v.union(
+			v.literal("running"),
+			v.literal("done"),
+			v.literal("failed"),
+		),
+		model: v.string(),
+		numTurns: v.float64(),
+		totalCostUsd: v.float64(),
+		stopReason: v.optional(v.string()),
+		permissionDenials: v.array(v.string()),
+		harnessVersion: v.string(),
+		evalProfile: v.string(),
+	}).index("by_generation", ["generationId"]),
+
+	agentEvents: defineTable({
+		generationId: v.id("generations"),
+		agentRunId: v.id("agentRuns"),
+		type: v.string(),
+		summary: v.string(),
+		payload: v.optional(v.string()),
+	})
+		.index("by_generation", ["generationId"])
+		.index("by_agent_run", ["agentRunId"]),
+
 	evalRuns: defineTable({
 		generationId: v.id("generations"),
+		agentRunId: v.optional(v.id("agentRuns")),
 		type: v.union(
-			v.literal("runtime"),
-			v.literal("interaction"),
+			v.literal("artifact"),
+			v.literal("roblox"),
 			v.literal("judge"),
 		),
 		status: v.union(

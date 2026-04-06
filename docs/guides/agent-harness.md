@@ -1,388 +1,124 @@
 # Agent Harness
 
-In this repo, "agent harness" means the code that turns a weak prompt into a sequence of explicit, typed artifacts instead of one opaque model response.
+In this repo, the harness is the code that turns a vague Roblox prompt into a durable run with typed artifacts, traces, and evals.
 
-The harness is intentionally simple:
+The live path is:
 
 ```text
 prompt
-  -> structured spec
-  -> mechanic code
-  -> compiled game
-  -> eval suite
-  -> persisted result
+  -> Convex generation row
+  -> worker run workspace
+  -> RobloxGameSpec
+  -> Rojo + Luau artifact bundle
+  -> artifact / roblox / judge eval suite
+  -> persisted run, events, and files
 ```
 
-That shape matters more than the number of model calls. The value is in the contracts between stages.
+The important point is not "one model call." The important point is that every stage produces something explicit and inspectable.
 
-## What counts as the harness here
+## Live entry point
 
-The harness spans two layers:
+The direct combined harness entry point is `generateRobloxRun()` in `src/worker/harness.ts`.
+
+Convex calls it indirectly through the local worker:
 
 ```text
-generation harness
-  expandIntent -> buildMechanic -> compileGame
-
-eval harness
-  runtimeEval -> interactionEval -> judgeEval -> summaryScore
+convex/generations.ts
+  -> src/worker/workerClient.ts
+  -> POST /runs/materialize
+  -> POST /runs/evaluate
+  -> src/worker/server.ts
+  -> src/worker/harness.ts
 ```
 
-The live product path is orchestrated from `convex/generations.ts`.
+## Stages
 
-The local development entry points are:
+### 1. Create a run workspace
 
-- `src/pipeline/testPipeline.ts`
-- `src/evals/testEvals.ts`
-
-There is also a shared standalone orchestrator in `src/pipeline/runGeneration.ts`, but the Convex action currently wires the stages inline instead of calling that function directly.
-
-## Stage map
+`createRunWorkspace()` copies the fixed scaffold into:
 
 ```text
-Stage 0  queue the run
-Stage 1  expand intent
-Stage 2  build mechanic
-Stage 3  compile game
-Stage 4  dispatch eval worker
-Stage 5  runtime eval
-Stage 6  interaction eval
-Stage 7  judge eval
-Stage 8  persist summary and surface in UI
+.context/runs/<generationId>/workspace
 ```
 
-## Stage-by-stage
+The scaffold comes from `src/worker/template/` and always contains:
 
-### Stage 0: Queue the run
+- `default.project.json`
+- `src/server/Mechanic.server.luau`
+- `src/client/Mechanic.client.luau`
+- `src/shared/GameSpec.json`
+- `src/shared/MechanicContract.luau`
+- `README.generated.md`
 
-File:
+Only three files are editable by the authoring agent:
 
-- `convex/generations.ts`
+- `src/server/Mechanic.server.luau`
+- `src/client/Mechanic.client.luau`
+- `src/shared/GameSpec.json`
 
-What it does:
+### 2. Plan a strict `RobloxGameSpec`
 
-- inserts a `generations` row with `status: "queued"`
-- schedules the internal `runPipeline` action
+The planner asks Claude Agent SDK for structured JSON that matches the `RobloxGameSpec` schema.
 
-Why it exists:
+If the planner errors or times out, the harness falls back to `deriveRobloxSpecFromPrompt()` in `src/worker/fallback.ts`.
 
-- separates user-triggered writes from long-running work
-- gives the UI a durable record immediately
+That keeps the run alive and makes the failure explicit in `events`.
 
-Current optimization opportunities:
+### 3. Materialize the editable scaffold files
 
-- add timestamps and attempt counters
-- store lightweight per-stage logs
-- support retries without creating a brand-new generation row
+The builder uses Claude Agent SDK with:
 
-### Stage 1: Expand intent
+- the `rojo_builder` subagent
+- `permissionMode: "acceptEdits"`
+- a tool allowlist
+- hooks that deny `Bash`, `WebFetch`, `.env`, `.git`, path traversal, and writes outside the run workspace
 
-Files:
+If the builder errors or times out, the harness falls back to deterministic Luau generation in `materializeFallbackProject()`.
 
-- `src/agents/expandIntent.ts`
-- `src/lib/openrouter.ts`
-- `src/lib/schemas.ts`
+If proxy evals fail, the harness gives Claude one repair pass. If repair fails, it falls back again.
 
-Input:
+### 4. Run the eval suite
 
-- vague prompt like `"space dodge rocks"`
+The worker runs three evals:
 
-Output:
+- `artifact` in `src/evals/artifactEval.ts`
+- `roblox` in `src/evals/robloxEval.ts`
+- `judge` in `src/evals/robloxJudgeEval.ts`
 
-- typed `GameSpec`
+Weights are:
 
-What it does:
+- `artifact`: 30
+- `roblox`: 30
+- `judge`: 40
 
-- sends the prompt to OpenRouter
-- constrains the model with a strict JSON contract
-- validates the result with Zod
+The judge prefers Claude, but it also has a deterministic fallback so a judge timeout does not kill the generation.
 
-Why it exists:
+### 5. Persist the run
 
-- converts underspecified user intent into a stable intermediate artifact
-- gives downstream steps something machine-checkable to build from
+Convex stores:
 
-Current optimization opportunities:
+- the top-level generation row
+- the artifact bundle
+- the latest agent run summary
+- agent events
+- one row per eval result
 
-- move prompts into versioned files instead of inline strings
-- add a repair loop for invalid JSON
-- make the model configurable per environment or run
-- store raw prompt and response traces for later comparison
+The UI reads those records and renders:
 
-### Stage 2: Build mechanic
+- the file tree
+- code viewer
+- spec summary
+- trace summary
+- eval results
 
-Files:
+## Why the fallback exists
 
-- `src/agents/buildMechanic.ts`
-- `src/lib/openrouter.ts`
+The repo is Anthropic-native, but the current planner and builder can still time out on short prompts. The fallback path is there to guarantee a complete run and make the failure mode measurable instead of opaque.
 
-Input:
+As of April 4, 2026, the verified behavior is:
 
-- `GameSpec`
+- `.env.local` is loaded for direct harness calls, `pnpm worker:dev`, and `pnpm benchmark`
+- end-to-end generation succeeds with `ANTHROPIC_API_KEY`
+- short prompts like `mall hang vibes` currently tend to complete through deterministic fallback after planner and builder timeouts
 
-Output:
-
-- JavaScript that defines exactly:
-  - `initMechanic(state)`
-  - `updateMechanic(state, input)`
-  - `renderMechanic(ctx, state)`
-
-What it does:
-
-- asks the model for game logic only
-- strips markdown fences if needed
-- validates that the three required functions exist
-
-Why it exists:
-
-- keeps the model focused on the part with the highest variance
-- avoids letting the model generate HTML boilerplate, routing, or DOM setup
-
-Current optimization opportunities:
-
-- replace substring checks with stronger parsing or sandbox validation
-- add repair prompts when one function is missing
-- capture token/cost/latency metadata per run
-- test generated code against a richer contract before compile
-
-### Stage 3: Compile game
-
-Files:
-
-- `src/compile/compileGame.ts`
-- `src/compile/engineShell.ts`
-
-Input:
-
-- mechanic code
-
-Output:
-
-- self-contained HTML document
-
-What it does:
-
-- injects generated mechanic code into a fixed engine shell
-- provides canvas setup, score UI, input handling, game loop, and eval hooks
-
-Why it exists:
-
-- makes every artifact structurally comparable
-- gives evals a stable runtime surface
-- centralizes engine fixes in one place
-
-Current optimization opportunities:
-
-- make shell versions explicit so runs can be compared across engine changes
-- expand instrumentation beyond `ready`, `snapshot()`, and simple metrics
-- add stricter compile-time checks that the injected code is safe to run
-
-### Stage 4: Dispatch eval worker
-
-Files:
-
-- `src/evals/evalWorkerClient.ts`
-- `src/app/api/evals/run/route.ts`
-
-Input:
-
-- `prompt`
-- `spec`
-- `mechanicCode`
-- `html`
-
-Output:
-
-- full eval suite result
-
-What it does:
-
-- posts the compiled artifact to a browser-capable worker endpoint
-- validates both request and response with Zod
-
-Why it exists:
-
-- keeps Playwright out of the Convex runtime boundary
-- makes the worker transport explicit
-
-Current optimization opportunities:
-
-- move from the demo route handler to a dedicated worker service
-- add queue semantics and retry policies
-- support partial result streaming instead of returning the whole suite at once
-
-### Stage 5: Runtime eval
-
-File:
-
-- `src/evals/runtimeEval.ts`
-
-Input:
-
-- compiled HTML
-
-Output:
-
-- `RuntimeEvalResult`
-
-What it does:
-
-- loads the game in Playwright
-- waits for `window.__gameEval.ready`
-- captures page errors
-- tries to read a snapshot
-
-Why it exists:
-
-- this is the cheapest high-signal gate
-- if the game does not boot, nothing else matters
-
-Current optimization opportunities:
-
-- capture console warnings separately from hard errors
-- store load timings
-- persist richer failure diagnostics for debugging
-
-### Stage 6: Interaction eval
-
-File:
-
-- `src/evals/interactionEval.ts`
-
-Input:
-
-- compiled HTML
-
-Output:
-
-- `InteractionEvalResult`
-
-What it does:
-
-- drives arrow-key input through Playwright
-- samples snapshots over time
-- checks for basic liveness and state change
-
-Why it exists:
-
-- catches games that technically boot but do nothing useful
-- tests the runtime behavior rather than just startup
-
-Current optimization opportunities:
-
-- make input policies configurable by genre
-- use shell metrics more heavily instead of simple before/after comparisons
-- add deterministic seeds for reproducible interaction runs
-- record traces or videos for failed cases
-
-### Stage 7: Judge eval
-
-File:
-
-- `src/evals/judgeEval.ts`
-
-Input:
-
-- original prompt
-- `GameSpec`
-- mechanic code
-- runtime result
-- interaction result
-
-Output:
-
-- `JudgeEvalResult`
-
-What it does:
-
-- asks a model to score spec adherence across several dimensions
-- validates and normalizes the structured response
-
-Why it exists:
-
-- runtime and interaction are not enough to tell whether the game is the right game
-- it closes the semantic gap between "works" and "matches intent"
-
-Current optimization opportunities:
-
-- use rubric versioning
-- compare multiple judge prompts or models
-- add example calibrations so score drift is easier to detect
-- cache shared prompt prefixes to cut latency and cost
-
-### Stage 8: Persist summary and surface in UI
-
-Files:
-
-- `convex/generations.ts`
-- `convex/schema.ts`
-- `src/app/page.tsx`
-- `src/app/g/[id]/page.tsx`
-
-What it does:
-
-- stores each eval result in `evalRuns`
-- copies summary fields onto the parent `generations` row
-- exposes the current state through realtime Convex queries
-
-Why it exists:
-
-- keeps artifacts inspectable after the run finishes
-- lets the UI render history and not just the latest in-memory result
-
-Current optimization opportunities:
-
-- persist per-eval lifecycle states such as `queued`, `running`, `done`, `failed`
-- show partial eval progress as each stage completes
-- reduce the amount of eval-specific branching in the UI with a registry-driven renderer
-
-## Why this harness shape works
-
-```text
-each stage narrows uncertainty
-
-prompt         = ambiguous human input
-GameSpec       = structured intent
-mechanic code  = executable logic contract
-compiled HTML  = stable runtime artifact
-eval results   = measurable quality signals
-Convex rows    = durable history
-```
-
-The system is easier to debug because each boundary has a visible artifact.
-
-## Current rough edges
-
-These are the main places where the harness is still intentionally MVP-shaped:
-
-- `convex/generations.ts` duplicates orchestration logic instead of calling `runGenerationPipeline()` directly
-- prompts live inline in TypeScript files
-- repair and retry loops do not exist yet
-- eval persistence is explicit per eval type, not registry-driven
-- the worker returns a complete suite in one shot instead of incrementally
-
-None of that blocks the demo. It just means the next round of work should focus more on harness ergonomics than on adding more model calls.
-
-## Best next optimizations
-
-If you want to improve the harness without changing the product idea, the highest-leverage moves are:
-
-1. Unify the Convex action with `src/pipeline/runGeneration.ts` so the generation path has one orchestrator.
-2. Add repair loops for invalid `GameSpec` output and incomplete mechanic code.
-3. Version prompts, rubrics, and engine shell changes so runs are comparable over time.
-4. Move Playwright execution into a dedicated worker and persist per-eval progress.
-5. Add richer artifact logging so failures can be clustered and compared.
-
-## Mental model
-
-Do not think of this repo as "a model that writes games."
-
-Think of it as:
-
-```text
-a typed workflow
-that uses models at a few high-variance steps
-and surrounds them with deterministic scaffolding,
-measurement, and persistence
-```
-
-That is the real harness.
+That is acceptable for the MVP because the contract, trace surface, and eval surface are all working. The next quality step is improving the Claude-authored hit rate, not replacing the harness shape.

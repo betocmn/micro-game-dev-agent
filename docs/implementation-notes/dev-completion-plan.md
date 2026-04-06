@@ -2,134 +2,77 @@
 
 ## Purpose
 
-Turn the repo into something founder-ready under a one-hour timebox while making the architecture easier to explain against the Lemonade stack.
+Track the repo state after the Roblox harness conversion and the follow-up hardening pass on April 4, 2026.
 
-This document now reflects the repo state after the April 4, 2026 completion pass.
+## What shipped
 
-## What Shipped
+The repo now demonstrates this live loop:
 
-The repo now demonstrates the full demo loop:
-- vague prompt -> structured `GameSpec`
-- `GameSpec` -> mechanic code
-- mechanic code -> playable HTML5 canvas game
-- compiled game -> persisted eval suite
-- persisted eval suite -> live UI updates on the home page and detail page
+- vague prompt -> `RobloxGameSpec`
+- `RobloxGameSpec` -> constrained Rojo + Luau scaffold
+- scaffold -> proxy eval suite
+- Convex persistence -> reactive UI
 
-## Completion Summary
+The old HTML canvas path is still in the repo only as legacy reference.
 
-### 1. Repo runnable and documented
+## Verified state
 
-Completed:
-- `.env.local.example` exists and documents the required local env vars
-- `README.md` matches the actual local setup flow
-- Playwright browser installation is documented
-- the repo already includes generated Convex client files, and the README now explains how they fit into local bootstrapping
+Verified on April 4, 2026:
 
-Outcome:
-- a fresh clone has a clearer path to `pnpm install`, `pnpm exec playwright install`, `cp .env.local.example .env.local`, and `pnpm dev`
+- `pnpm check` passes
+- `pnpm test` passes
+- `.env.local` is loaded automatically by the worker, benchmark CLI, and direct harness calls
+- a real Anthropic-backed direct harness run completes end to end
+- a real `POST /runs/generate` worker request completes end to end
 
-### 2. Live eval persistence wired into the product
+## Important nuance
 
-Completed:
-- after compile, generations now move to `evaluating`
-- Convex calls a browser-capable eval worker path
-- runtime, interaction, and judge evals are persisted with `saveEvalResult()`
-- summary fields are written back onto the generation row
-- the home page and detail page both surface persisted eval results
+The Anthropic auth path is healthy, but short prompts still tend to push the planner and builder into timeouts.
 
-Files touched for this:
-- `convex/generations.ts`
-- `src/app/api/evals/run/route.ts`
-- `src/evals/evalWorkerClient.ts`
-- `src/app/page.tsx`
-- `src/app/g/[id]/page.tsx`
-- `src/types.ts`
+The current harness therefore succeeds by:
 
-Outcome:
-- the biggest product mismatch is closed; the live app now reaches scored generations instead of stopping immediately after compile
+1. trying Claude Agent SDK first
+2. recording fallback events when planning or building times out
+3. materializing deterministic scaffold files
+4. continuing through the full eval and persistence flow
 
-### 3. Worker boundary made explicit
+That is an acceptable MVP tradeoff because the product boundary, artifact contract, eval persistence, and benchmark surface all work today.
 
-Completed:
-- Playwright runs through a Node worker path exposed by Next.js
-- Convex remains the system of record and orchestration layer
-- the README explains that this route-handler worker is the demo implementation, not the final production architecture
+## What this repo now teaches about Lemonade's stack
 
-Current demo split:
-- `Convex`: generation lifecycle and persistence
-- `Next.js route handler`: browser-capable eval execution
-- `Playwright`: runtime and interaction checks
+- the worker boundary matters more than the exact model prompt
+- evals need durable artifact contracts, not just one final score
+- Convex is useful as orchestration glue and live state, not as the place to execute the whole agent
+- recovery paths matter because frontier model behavior shifts quickly
 
-Remaining production step:
-- move eval execution into a dedicated Fly or Docker worker queue that reads jobs from Convex and writes results back
+## Current backlog
 
-### 4. Easy drift and robustness fixes landed
+### Highest priority
 
-Completed:
-- shared pipeline modules in `src/` are reused from `convex/` instead of duplicating prompt and compile logic there
-- LLM outputs are validated with Zod instead of relying on a few ad hoc checks
-- frontend JSON parsing is guarded with safe helpers
-- generations record `failureStage`, not only a final error string
-- UI status and failure rendering are centralized and typed
+- increase the rate of successful Claude-authored planner output
+- increase the rate of successful Claude-authored scaffold edits
+- reduce how often the deterministic fallback path is needed
 
-Outcome:
-- the repo is easier to explain and less fragile during live demos
+### Next likely product steps
 
-## Definition Of Complete Enough
+- add screenshot-conditioned prompting through `referenceImageUrl`
+- add richer trace summaries in the UI
+- add benchmark diff tooling by harness version
+- add Roblox Studio or Rojo validation outside proxy heuristics
 
-The repo now meets the original demo bar:
+### Still not in scope
 
-1. A fresh clone can be installed and booted with documented environment setup.
-2. The UI can generate a playable game end to end.
-3. Eval results are visible in a repeatable demo path.
-4. The architecture clearly shows the split between Convex orchestration and a browser-capable worker.
-5. The stack can be explained as an intentional system instead of a pile of partial features.
+- Roblox Studio automation
+- cloud worker deployment
+- true playable simulation evals inside Roblox
 
-## Remaining Backlog After This Pass
+## Definition of complete enough
 
-### Agent Harness
+This repo is complete enough for the current goal if:
 
-- Move prompt templates into versioned files instead of inline strings.
-- Add a repair loop for invalid JSON or missing mechanic functions.
-- Make the model configurable from env instead of hard-coding a single default everywhere.
-- Store intermediate artifacts and prompt traces for comparison across runs.
+1. it shows a real Anthropic-native worker boundary
+2. it persists artifacts, traces, and evals in Convex
+3. it demonstrates benchmarkable Roblox-specific evals
+4. it makes current failure modes visible instead of hidden
 
-### Evals
-
-- Move Playwright execution into a dedicated Fly or Docker worker.
-- Persist eval lifecycle states such as `queued`, `running`, `done`, and `failed`.
-- Store per-eval timing, browser errors, and key metrics.
-- Add retry policies for flaky browser failures.
-- Show partial eval progress as each eval completes.
-
-### Convex
-
-- Add timestamps and attempt counters to generation and eval rows.
-- Consider an explicit job table if worker-based eval execution becomes more complex.
-- Support retries or resumable eval runs instead of a single pass.
-
-### Frontend
-
-- Add curated demo prompts and clearer empty-state guidance.
-- Surface more granular progress history for long-running generations.
-- Improve typing on the remaining optimistic UI surfaces.
-
-### Deployment
-
-- Add a Dockerfile for the browser worker.
-- Split deployment responsibilities clearly across the web app, Convex backend, and worker.
-- Verify hosted deployment instructions against an actual deployed environment.
-
-## What This Teaches About Lemonade's Stack
-
-This repo now shows the intended system more clearly:
-
-- `Agent harness`: the real work is output contracts, intermediate artifacts, and recovery, not just calling a model.
-- `Convex`: best used as realtime state and orchestration glue for visible multi-stage work.
-- `Browser worker`: Playwright belongs in a browser-capable runtime, not in Convex cloud actions.
-- `Evals`: runtime, interaction, and judge signals make generated games inspectable.
-- `Extensibility`: cleaner boundaries make it easier to swap models, worker implementations, and eval strategies.
-
-## Founder-Ready Summary
-
-The repo now proves the core loop of vague prompt -> structured intent -> mechanic code -> playable game -> persisted evals -> reactive UI, and the main remaining production step is moving the demo worker route into a dedicated worker that writes results back into Convex.
+That bar is met. The next round is quality and steerability, not architecture rescue.

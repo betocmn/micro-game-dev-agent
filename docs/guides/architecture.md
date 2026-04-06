@@ -1,10 +1,10 @@
 # Architecture
 
-This repo is a small vertical slice with three cooperating parts:
+This repo now has three live boundaries:
 
-1. `Next.js` renders the UI and hosts the demo eval worker route.
-2. `Convex` owns durable state, scheduling, and realtime subscriptions.
-3. `src/` holds the shared generation and eval logic used by both.
+1. `Next.js 16` renders the product UI.
+2. `Convex` owns durable state and orchestration.
+3. The local worker owns Anthropic generation and eval execution.
 
 ## System map
 
@@ -16,48 +16,32 @@ Next.js UI
   src/app/page.tsx
   src/app/g/[id]/page.tsx
   |
-  | submit prompt / subscribe to updates
+  | enqueue prompt / subscribe to updates
   v
 Convex
   convex/generations.ts
   convex/schema.ts
   |
-  | enqueueGeneration()
-  | -> schedules runPipeline()
+  | POST /runs/materialize
+  | POST /runs/evaluate
   v
-generation pipeline
-  src/agents/expandIntent.ts
-  src/agents/buildMechanic.ts
-  src/compile/compileGame.ts
-  src/compile/engineShell.ts
+harness worker
+  src/worker/server.ts
+  src/worker/harness.ts
   |
-  | produces
-  | - GameSpec JSON
-  | - mechanic code
-  | - compiled HTML game
-  v
-eval worker client
-  src/evals/evalWorkerClient.ts
-  |
-  | POST /api/evals/run
-  v
-Next.js route handler worker
-  src/app/api/evals/run/route.ts
-  |
-  v
-eval harness
-  src/evals/runEvals.ts
-  |-- src/evals/runtimeEval.ts
-  |-- src/evals/interactionEval.ts
-  `-- src/evals/judgeEval.ts
-  |
+  | creates .context/runs/<generationId>/workspace
+  | plans RobloxGameSpec
+  | materializes editable Luau files
+  | runs eval suite
   v
 Convex persistence
-  saveEvalResult()
-  updateGeneration()
+  generations
+  agentRuns
+  agentEvents
+  evalRuns
   |
   v
-Next.js UI updates live through Convex queries
+Next.js UI updates through Convex queries
 ```
 
 ## Request lifecycle
@@ -65,133 +49,96 @@ Next.js UI updates live through Convex queries
 ```text
 prompt
   -> enqueueGeneration()
-  -> status: queued
+  -> generation.status = queued
   -> runPipeline()
-  -> status: expanding
-  -> expandIntent() -> structured GameSpec
-  -> status: building
-  -> buildMechanic() -> 3 JS functions
-  -> status: compiling
-  -> compileGame() -> HTML with fixed engine shell
-  -> status: evaluating
-  -> runEvalWorker()
-  -> runtime + interaction + judge results saved
-  -> summary fields saved on generation
-  -> status: done
+  -> status = expanding
+  -> worker creates run workspace
+  -> planner produces RobloxGameSpec or fallback spec
+  -> status = building
+  -> builder edits scaffold or fallback builder writes deterministic files
+  -> status = evaluating
+  -> artifact bundle is persisted for inspection
+  -> artifact + roblox + judge evals run in the worker
+  -> Convex persists bundle, trace, and eval rows
+  -> status = done or failed
 ```
 
-If any stage throws, Convex marks the generation as `failed` and records the `failureStage`.
+If any stage throws before a valid response is produced, Convex marks the generation as `failed` and stores `failureStage`.
 
-## Directory responsibilities
+## Runtime responsibilities
+
+### Next.js
+
+Owns:
+
+- the home page
+- the generation detail page
+- user mutations and realtime reads through Convex hooks
+
+Does not own:
+
+- model execution
+- eval execution
+- workspace file writes
+
+### Convex
+
+Owns:
+
+- generation lifecycle
+- retry bookkeeping
+- persistent artifact bundle storage
+- agent run and event storage
+- eval row storage
+
+Convex is the source of truth. The worker is stateless between requests except for the run workspace directory under `.context/`.
+
+### Worker
+
+Owns:
+
+- loading `.env.local`
+- Anthropic SDK calls
+- workspace creation and artifact loading
+- file access policy enforcement
+- proxy eval execution
+
+Endpoints:
+
+- `POST /runs/materialize`
+- `POST /runs/generate`
+- `POST /runs/evaluate`
+
+## Artifact contract
+
+The live artifact is no longer playable browser HTML. It is a fixed Rojo-style bundle:
 
 ```text
-convex/
-  schema, mutations, queries, internal actions
-
-src/app/
-  Next.js App Router UI and the demo eval worker route
-
-src/agents/
-  LLM-backed generation steps
-  - expand vague prompt into GameSpec
-  - build mechanic code from GameSpec
-
-src/compile/
-  deterministic assembly layer
-  - fixed engine shell
-  - mechanic code insertion
-
-src/evals/
-  eval harness, Playwright checks, judge pass, worker client
-
-src/lib/
-  shared schemas, OpenRouter wrapper, safe JSON parsing, UI status labels
-
-src/pipeline/
-  standalone pipeline entry points for local CLI testing
-```
-
-## Core design decisions
-
-### 1. The model does not generate the whole app
-
-The LLM only generates:
-
-- a structured `GameSpec`
-- three mechanic functions:
-  - `initMechanic(state)`
-  - `updateMechanic(state, input)`
-  - `renderMechanic(ctx, state)`
-
-Everything else comes from the fixed shell in `src/compile/engineShell.ts`.
-
-That keeps the artifact shape stable and makes failures easier to localize.
-
-### 2. The game is instrumented for evaluation
-
-Every compiled game exposes:
-
-```text
-window.__gameEval = {
-  ready,
-  snapshot(),
-  metrics: {
-    collisions,
-    pickups,
-    scoreTicks
-  }
+ArtifactBundle {
+  artifactType: "roblox-rojo"
+  scaffoldVersion: "claude-rojo-v1"
+  files: ArtifactFile[]
 }
 ```
 
-This is the contract the Playwright evals depend on. The harness measures state, not screenshots.
+That contract keeps runs comparable across harness versions and makes proxy evals deterministic.
 
-### 3. Convex is the source of truth
+## Eval contract
 
-Convex owns:
+The live eval profile is `roblox-social-v1`.
 
-- generation rows
-- per-eval rows
-- status transitions
-- error state
-- realtime reads for the UI
+The suite is:
 
-The frontend does not poll. It subscribes with `useQuery()` and mutates with `useMutation()`.
+- `artifact`: required files, schema validity, scaffold checksum, editable boundaries
+- `roblox`: server/client split, banned APIs, contract exports, remote-signal heuristics, social-loop heuristics
+- `judge`: Anthropic-backed scoring with deterministic fallback
 
-### 4. Playwright stays outside the Convex runtime boundary
+## Known current behavior
 
-`runtimeEval.ts` and `interactionEval.ts` need a browser-capable environment. For the demo, that environment is a Next.js route handler with `export const runtime = "nodejs"` in `src/app/api/evals/run/route.ts`.
+As of April 4, 2026:
 
-The current split is:
+- the Anthropic auth path is healthy
+- direct harness runs and HTTP worker runs complete successfully
+- short prompts may still hit planner and builder timeouts, then finish through the deterministic fallback path
 
-```text
-Convex = orchestration and persistence
-Next.js route handler = browser-capable demo worker
-Playwright = runtime and interaction execution
-OpenRouter = generation and judge model calls
-```
-
-For production, the obvious next move is a dedicated worker service that reads jobs from Convex and writes results back.
-
-## Important files to read first
-
-- `convex/generations.ts`
-- `convex/schema.ts`
-- `src/app/page.tsx`
-- `src/app/g/[id]/page.tsx`
-- `src/app/api/evals/run/route.ts`
-- `src/agents/expandIntent.ts`
-- `src/agents/buildMechanic.ts`
-- `src/compile/engineShell.ts`
-- `src/evals/runEvals.ts`
-
-## Mental model
-
-```text
-UI asks for a run
-Convex records and advances the run
-agents produce explicit intermediate artifacts
-compile turns those artifacts into one playable HTML document
-evals score the document
-Convex persists the results
-UI reflects the current truth
-```
+That means the architecture is correct and durable, but the current model-steerability is still conservative. The obvious next improvement is raising the rate of successful Claude-authored scaffold edits without changing the worker or persistence boundaries.
