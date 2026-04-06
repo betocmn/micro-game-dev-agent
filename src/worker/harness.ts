@@ -11,8 +11,8 @@ import { generateRunResponseSchema } from "@/lib/schemas";
 import type {
 	AgentEventSummary,
 	AgentRunSummary,
-	GenerationFailureStage,
 	GenerateRunResponse,
+	GenerationFailureStage,
 	RobloxEvalSuiteResult,
 	RobloxGameSpec,
 } from "@/types";
@@ -571,7 +571,11 @@ export async function generateRobloxRun(
 			[buildRun, specRun],
 			"builder",
 		);
-		let events = collectEvents(specRun?.events, buildRun?.events, fallbackEvents);
+		let events = collectEvents(
+			specRun?.events,
+			buildRun?.events,
+			fallbackEvents,
+		);
 
 		if (!evalSuite.artifact.pass || !evalSuite.roblox.pass) {
 			failureStage = "building";

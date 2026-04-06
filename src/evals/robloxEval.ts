@@ -54,7 +54,8 @@ export async function runRobloxEval(
 	];
 
 	const socialTokens = new Set(
-		`${serverCode}\n${clientCode}`.toLowerCase().match(SOCIAL_SIGNAL_PATTERN) ?? [],
+		`${serverCode}\n${clientCode}`.toLowerCase().match(SOCIAL_SIGNAL_PATTERN) ??
+			[],
 	);
 
 	const socialSignals = Array.from(socialTokens);

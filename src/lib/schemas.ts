@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { isValidRunId } from "./runId";
 import type {
 	AgentEventSummary,
 	AgentRunSummary,
@@ -22,6 +21,7 @@ import type {
 	RobloxWorldObject,
 	RuntimeEvalResult,
 } from "../types";
+import { isValidRunId } from "./runId";
 
 export const gameEntitySchema: z.ZodType<GameEntity> = z.object({
 	name: z.string().min(1),
@@ -193,13 +193,10 @@ export const evalWorkerRequestSchema = z.object({
 
 export const generateRunRequestSchema: z.ZodType<GenerateRunRequest> = z.object(
 	{
-		generationId: z
-			.string()
-			.min(1)
-			.refine(isValidRunId, {
-				message:
-					"generationId must use only letters, numbers, dots, underscores, or hyphens.",
-			}),
+		generationId: z.string().min(1).refine(isValidRunId, {
+			message:
+				"generationId must use only letters, numbers, dots, underscores, or hyphens.",
+		}),
 		prompt: z.string().min(1),
 		referenceImageUrl: z.string().url().nullable().optional(),
 	},
