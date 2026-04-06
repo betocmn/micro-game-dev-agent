@@ -22,7 +22,7 @@ import type {
 	RobloxEvalSuiteResult,
 	RobloxGameSpec,
 } from "@/types";
-import { ARTIFACT_TYPE, EVAL_PROFILE, HARNESS_VERSION } from "./constants";
+import { ARTIFACT_TYPE, HARNESS_VERSION } from "./constants";
 import { HarnessStageError } from "./errors";
 import {
 	deriveRobloxSpecFromPrompt,
@@ -698,11 +698,7 @@ export async function evaluateRobloxRun(
 			},
 			evalSuite,
 			agentRun: shouldRepair
-				? getPreferredAgentRun(
-						request.generationId,
-						[repairRun],
-						"repair",
-					)
+				? getPreferredAgentRun(request.generationId, [repairRun], "repair")
 				: null,
 			events: shouldRepair
 				? collectEvents(repairRun?.events, fallbackEvents)

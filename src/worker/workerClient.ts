@@ -11,7 +11,9 @@ import { HarnessStageError, isGenerationFailureStage } from "./errors";
 const DEFAULT_HARNESS_WORKER_URL = "http://127.0.0.1:3200";
 
 export type HarnessGenerateRequest = z.infer<typeof generateRunRequestSchema>;
-export type HarnessMaterializeRequest = z.infer<typeof generateRunRequestSchema>;
+export type HarnessMaterializeRequest = z.infer<
+	typeof generateRunRequestSchema
+>;
 export type HarnessEvaluateRequest = z.infer<typeof evaluateRunRequestSchema>;
 
 export function resolveHarnessWorkerUrl(explicitUrl?: string): string {
