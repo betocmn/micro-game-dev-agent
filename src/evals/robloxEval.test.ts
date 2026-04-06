@@ -66,4 +66,35 @@ describe("runRobloxEval", () => {
 		expect(result.pass).toBe(false);
 		expect(result.bannedApis).toContain("HttpService:GetAsync");
 	});
+
+	it("fails when the Luau files contain no social-loop behavior", async () => {
+		const result = await runRobloxEval("mall hang vibes", spec, {
+			...artifactBundle,
+			files: artifactBundle.files.map((file) => {
+				if (file.path === "src/server/Mechanic.server.luau") {
+					return {
+						...file,
+						content:
+							'local ReplicatedStorage = game:GetService("ReplicatedStorage")\nlocal MechanicServer = {}\nfunction MechanicServer.start() return { status = "ready" } end\nreturn MechanicServer',
+					};
+				}
+
+				if (file.path === "src/client/Mechanic.client.luau") {
+					return {
+						...file,
+						content:
+							'local ReplicatedStorage = game:GetService("ReplicatedStorage")\nlocal MechanicClient = {}\nfunction MechanicClient.start() return { status = "ready" } end\nreturn MechanicClient',
+					};
+				}
+
+				return file;
+			}),
+		});
+
+		expect(result.pass).toBe(false);
+		expect(result.socialSignals).toHaveLength(0);
+		expect(result.notes).toContain(
+			"No clear social-loop signals detected in the artifact.",
+		);
+	});
 });

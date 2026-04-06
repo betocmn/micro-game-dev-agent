@@ -1,6 +1,9 @@
 import type { ArtifactBundle, RobloxEvalResult, RobloxGameSpec } from "@/types";
 import { FORBIDDEN_LUA_PATTERNS } from "@/worker/constants";
 
+const SOCIAL_SIGNAL_PATTERN =
+	/(friend|party|social|hangout|shared|group|together|emote|trade|crew|squad|team)/g;
+
 function getFileContent(bundle: ArtifactBundle, filePath: string): string {
 	return bundle.files.find((file) => file.path === filePath)?.content ?? "";
 }
@@ -10,8 +13,8 @@ function collectBannedApis(content: string): string[] {
 }
 
 export async function runRobloxEval(
-	prompt: string,
-	spec: RobloxGameSpec,
+	_prompt: string,
+	_spec: RobloxGameSpec,
 	artifactBundle: ArtifactBundle,
 ): Promise<RobloxEvalResult> {
 	const serverCode = getFileContent(
@@ -51,19 +54,7 @@ export async function runRobloxEval(
 	];
 
 	const socialTokens = new Set(
-		[
-			prompt,
-			spec.socialLoop,
-			spec.progressionHook,
-			spec.fantasy,
-			serverCode,
-			clientCode,
-		]
-			.join(" ")
-			.toLowerCase()
-			.match(
-				/(friend|party|social|hangout|shared|group|together|emote|trade|crew|squad|team)/g,
-			) ?? [],
+		`${serverCode}\n${clientCode}`.toLowerCase().match(SOCIAL_SIGNAL_PATTERN) ?? [],
 	);
 
 	const socialSignals = Array.from(socialTokens);
