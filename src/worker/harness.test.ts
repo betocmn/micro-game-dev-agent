@@ -11,7 +11,7 @@ vi.mock("@/evals/robloxRunEvals", () => ({
 	runRobloxEvals: runRobloxEvalsMock,
 }));
 
-import { generateRobloxRun } from "./harness";
+import { generateRobloxRun, getWorkspaceToolViolation } from "./harness";
 
 describe("generateRobloxRun", () => {
 	const generationId = "harness-fallback-test";
@@ -138,5 +138,57 @@ describe("generateRobloxRun", () => {
 				failureStage: "evaluating",
 			});
 		}
+	});
+});
+
+describe("getWorkspaceToolViolation", () => {
+	const workspaceDir = path.join(
+		process.cwd(),
+		".context/runs",
+		"harness-policy-test",
+		"workspace",
+	);
+
+	it("allows edit payload content that contains Luau concatenation", () => {
+		expect(
+			getWorkspaceToolViolation(
+				"Edit",
+				{
+					file_path: path.join(workspaceDir, "src/server/Mechanic.server.luau"),
+					old_string: 'return "ready"',
+					new_string: 'return player.Name .. " ready"',
+				},
+				workspaceDir,
+			),
+		).toBeNull();
+	});
+
+	it("blocks mutating fixed scaffold files", () => {
+		expect(
+			getWorkspaceToolViolation(
+				"Write",
+				{
+					file_path: path.join(workspaceDir, "default.project.json"),
+					content: "{}",
+				},
+				workspaceDir,
+			),
+		).toBe(
+			"Edits are restricted to src/client/Mechanic.client.luau, src/server/Mechanic.server.luau, src/shared/GameSpec.json.",
+		);
+	});
+
+	it("still blocks traversal in path arguments", () => {
+		const traversalPath = `${workspaceDir}/../secrets.txt`;
+
+		expect(
+			getWorkspaceToolViolation(
+				"Read",
+				{
+					file_path: traversalPath,
+				},
+				workspaceDir,
+			),
+		).toBe(`Path traversal is blocked: ${traversalPath}`);
 	});
 });

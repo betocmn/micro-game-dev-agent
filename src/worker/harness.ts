@@ -1,3 +1,4 @@
+import path from "node:path";
 import {
 	type AgentDefinition,
 	type HookCallbackMatcher,
@@ -33,6 +34,7 @@ import { robloxGameSpecJsonSchema } from "./jsonSchemas";
 import {
 	assertWorkspaceExists,
 	createRunWorkspace,
+	getEditableFileSet,
 	getFixedScaffoldChecksum,
 	getRunWorkspacePaths,
 	getTemplateBundle,
@@ -45,6 +47,7 @@ const SDK_CLIENT_APP = "caracas-v4/0.1.0";
 const PLANNER_TIMEOUT_MS = 25000;
 const BUILDER_TIMEOUT_MS = 45000;
 const REPAIR_TIMEOUT_MS = 30000;
+const MUTATING_TOOL_NAMES = new Set(["Edit", "Write", "NotebookEdit"]);
 
 type QueryFunction = typeof query;
 
@@ -206,41 +209,112 @@ function toHarnessStageError(
 	return new HarnessStageError(getErrorMessage(error), stage);
 }
 
+function isPathInputKey(key: string): boolean {
+	return key === "path" || key.endsWith("_path");
+}
+
+function getPathInputs(
+	rawInput: unknown,
+	currentKey: string | null = null,
+): string[] {
+	if (typeof rawInput === "string") {
+		return currentKey && isPathInputKey(currentKey) ? [rawInput] : [];
+	}
+
+	if (Array.isArray(rawInput)) {
+		return rawInput.flatMap((value) => getPathInputs(value, currentKey));
+	}
+
+	if (!rawInput || typeof rawInput !== "object") {
+		return [];
+	}
+
+	return Object.entries(rawInput as Record<string, unknown>).flatMap(
+		([key, value]) => getPathInputs(value, key),
+	);
+}
+
+function hasTraversalSegment(rawPath: string): boolean {
+	return rawPath.split(/[\\/]+/).includes("..");
+}
+
+function resolveWorkspaceRelativePath(
+	workspaceDir: string,
+	candidatePath: string,
+): string | null {
+	const resolvedPath = path.resolve(workspaceDir, candidatePath);
+	if (!isPathWithinDirectory(workspaceDir, resolvedPath)) {
+		return null;
+	}
+
+	return path
+		.relative(path.resolve(workspaceDir), resolvedPath)
+		.replaceAll(path.sep, "/");
+}
+
 function pathViolatesPolicy(
 	rawInput: unknown,
 	workspaceDir: string,
 ): string | null {
-	if (!rawInput || typeof rawInput !== "object") {
-		return null;
-	}
-
-	for (const value of Object.values(rawInput as Record<string, unknown>)) {
-		if (typeof value === "string") {
-			if (value.includes(".env")) {
-				return "Access to .env files is blocked.";
-			}
-			if (value.includes(".git")) {
-				return "Access to .git paths is blocked.";
-			}
-			if (value.includes("..")) {
-				return `Path traversal is blocked: ${value}`;
-			}
-			if (
-				value.startsWith("/") &&
-				!isPathWithinDirectory(workspaceDir, value)
-			) {
-				return `Path ${value} is outside the allowed workspace.`;
-			}
+	for (const value of getPathInputs(rawInput)) {
+		if (value.includes(".env")) {
+			return "Access to .env files is blocked.";
 		}
-		if (typeof value === "object") {
-			const nestedViolation = pathViolatesPolicy(value, workspaceDir);
-			if (nestedViolation) {
-				return nestedViolation;
-			}
+		if (value.includes(".git")) {
+			return "Access to .git paths is blocked.";
+		}
+		if (hasTraversalSegment(value)) {
+			return `Path traversal is blocked: ${value}`;
+		}
+		if (!resolveWorkspaceRelativePath(workspaceDir, value)) {
+			return `Path ${value} is outside the allowed workspace.`;
 		}
 	}
 
 	return null;
+}
+
+function editViolatesPolicy(
+	toolName: string,
+	rawInput: unknown,
+	workspaceDir: string,
+): string | null {
+	if (!MUTATING_TOOL_NAMES.has(toolName)) {
+		return null;
+	}
+
+	if (!rawInput || typeof rawInput !== "object") {
+		return null;
+	}
+
+	const pathKey = toolName === "NotebookEdit" ? "notebook_path" : "file_path";
+	const targetPath = (rawInput as Record<string, unknown>)[pathKey];
+	if (typeof targetPath !== "string") {
+		return null;
+	}
+
+	const relativePath = resolveWorkspaceRelativePath(workspaceDir, targetPath);
+	if (!relativePath) {
+		return null;
+	}
+
+	const editableFiles = getEditableFileSet();
+	if (editableFiles.has(relativePath)) {
+		return null;
+	}
+
+	return `Edits are restricted to ${Array.from(editableFiles).join(", ")}.`;
+}
+
+export function getWorkspaceToolViolation(
+	toolName: string,
+	toolInput: unknown,
+	workspaceDir: string,
+): string | null {
+	return (
+		pathViolatesPolicy(toolInput, workspaceDir) ??
+		editViolatesPolicy(toolName, toolInput, workspaceDir)
+	);
 }
 
 function createWorkspaceHooks(
@@ -264,7 +338,8 @@ function createWorkspaceHooks(
 							};
 						}
 
-						const violation = pathViolatesPolicy(
+						const violation = getWorkspaceToolViolation(
+							input.tool_name,
 							input.tool_input,
 							workspaceDir,
 						);
