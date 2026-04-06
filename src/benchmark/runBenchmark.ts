@@ -1,8 +1,8 @@
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import {
-	calculateBenchmarkSummary,
 	type BenchmarkCaseResult,
+	calculateBenchmarkSummary,
 } from "@/benchmark/benchmarkReport";
 import dataset from "@/evals/datasets/roblox-social-v1.json";
 import { ensureLocalEnvLoaded } from "@/lib/loadEnv";

@@ -7,12 +7,12 @@ import {
 } from "@anthropic-ai/claude-agent-sdk";
 import { runRobloxEvals } from "@/evals/robloxRunEvals";
 import { ensureLocalEnvLoaded } from "@/lib/loadEnv";
+import { isPathWithinDirectory } from "@/lib/runId";
 import {
 	evaluateRunResponseSchema,
 	generateRunResponseSchema,
 	materializeRunResponseSchema,
 } from "@/lib/schemas";
-import { isPathWithinDirectory } from "@/lib/runId";
 import type {
 	AgentEventSummary,
 	AgentRunSummary,
@@ -225,7 +225,10 @@ function pathViolatesPolicy(
 			if (value.includes("..")) {
 				return `Path traversal is blocked: ${value}`;
 			}
-			if (value.startsWith("/") && !isPathWithinDirectory(workspaceDir, value)) {
+			if (
+				value.startsWith("/") &&
+				!isPathWithinDirectory(workspaceDir, value)
+			) {
 				return `Path ${value} is outside the allowed workspace.`;
 			}
 		}

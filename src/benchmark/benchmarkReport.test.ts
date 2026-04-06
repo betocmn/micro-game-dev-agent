@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
-	calculateBenchmarkSummary,
 	type BenchmarkCaseResult,
+	calculateBenchmarkSummary,
 } from "./benchmarkReport";
 
 describe("calculateBenchmarkSummary", () => {
