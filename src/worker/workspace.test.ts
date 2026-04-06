@@ -45,4 +45,16 @@ describe("workspace helpers", () => {
 		);
 		expect(specFile?.content).toContain("Stage Hang");
 	});
+
+	it("rejects generation ids that attempt path traversal", async () => {
+		await expect(createRunWorkspace("../..")).rejects.toThrow(
+			"generationId must use only letters, numbers, dots, underscores, or hyphens.",
+		);
+	});
+
+	it("rejects nested generation ids", async () => {
+		await expect(createRunWorkspace("nested/child")).rejects.toThrow(
+			"generationId must use only letters, numbers, dots, underscores, or hyphens.",
+		);
+	});
 });

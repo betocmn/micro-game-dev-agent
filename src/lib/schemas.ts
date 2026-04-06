@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isValidRunId } from "./runId";
 import type {
 	AgentEventSummary,
 	AgentRunSummary,
@@ -192,7 +193,13 @@ export const evalWorkerRequestSchema = z.object({
 
 export const generateRunRequestSchema: z.ZodType<GenerateRunRequest> = z.object(
 	{
-		generationId: z.string().min(1),
+		generationId: z
+			.string()
+			.min(1)
+			.refine(isValidRunId, {
+				message:
+					"generationId must use only letters, numbers, dots, underscores, or hyphens.",
+			}),
 		prompt: z.string().min(1),
 		referenceImageUrl: z.string().url().nullable().optional(),
 	},

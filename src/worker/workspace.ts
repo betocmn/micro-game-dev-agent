@@ -9,6 +9,7 @@ import {
 	writeFile,
 } from "node:fs/promises";
 import path from "node:path";
+import { resolveRunDir } from "@/lib/runId";
 import { artifactBundleSchema, robloxGameSpecSchema } from "@/lib/schemas";
 import type { ArtifactBundle, ArtifactFile, RobloxGameSpec } from "@/types";
 import {
@@ -29,7 +30,7 @@ export interface RunWorkspace {
 export async function createRunWorkspace(
 	generationId: string,
 ): Promise<RunWorkspace> {
-	const runDir = path.join(RUNS_DIR, generationId);
+	const runDir = resolveRunDir(RUNS_DIR, generationId);
 	const workspaceDir = path.join(runDir, "workspace");
 
 	await rm(runDir, { force: true, recursive: true });
