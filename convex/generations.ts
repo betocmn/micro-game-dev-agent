@@ -4,6 +4,7 @@ import type {
 	RobloxEvalSuiteResult,
 } from "../src/types";
 import { EVAL_PROFILE, HARNESS_VERSION } from "../src/worker/constants";
+import { HarnessStageError } from "../src/worker/errors";
 import { runHarnessWorker } from "../src/worker/workerClient";
 import { internal } from "./_generated/api";
 import {
@@ -18,7 +19,6 @@ const generationStatusValidator = v.union(
 	v.literal("queued"),
 	v.literal("expanding"),
 	v.literal("building"),
-	v.literal("compiling"),
 	v.literal("evaluating"),
 	v.literal("done"),
 	v.literal("failed"),
@@ -28,7 +28,6 @@ const generationFailureStageValidator = v.union(
 	v.literal("setup"),
 	v.literal("expanding"),
 	v.literal("building"),
-	v.literal("compiling"),
 	v.literal("evaluating"),
 );
 
@@ -250,6 +249,11 @@ export const runPipeline = internalAction({
 				generationId,
 				prompt: generation.prompt,
 			});
+			failureStage = "evaluating";
+			await ctx.runMutation(internal.generations.updateGeneration, {
+				generationId,
+				fields: { status: "evaluating" },
+			});
 			const agentRunId = await ctx.runMutation(
 				internal.generations.saveAgentRun,
 				{
@@ -314,6 +318,9 @@ export const runPipeline = internalAction({
 				},
 			});
 		} catch (error) {
+			if (error instanceof HarnessStageError) {
+				failureStage = error.failureStage;
+			}
 			await failGeneration(error);
 		}
 	},

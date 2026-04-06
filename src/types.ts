@@ -145,7 +145,6 @@ export type GenerationStatus =
 	| "queued"
 	| "expanding"
 	| "building"
-	| "compiling"
 	| "evaluating"
 	| "done"
 	| "failed";
@@ -154,7 +153,6 @@ export type GenerationFailureStage =
 	| "setup"
 	| "expanding"
 	| "building"
-	| "compiling"
 	| "evaluating";
 
 export interface RuntimeEvalResult {

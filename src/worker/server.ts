@@ -7,6 +7,7 @@ import {
 	evaluateRunResponseSchema,
 	generateRunRequestSchema,
 } from "@/lib/schemas";
+import { HarnessStageError } from "./errors";
 import { generateRobloxRun } from "./harness";
 import { getFixedScaffoldChecksum, getTemplateBundle } from "./workspace";
 
@@ -41,7 +42,13 @@ export function startWorkerServer(
 			} catch (error) {
 				const message =
 					error instanceof Error ? error.message : "Unknown generation error";
-				sendJson(response, 400, { error: message });
+				sendJson(
+					response,
+					400,
+					error instanceof HarnessStageError
+						? { error: message, failureStage: error.failureStage }
+						: { error: message },
+				);
 			}
 			return;
 		}

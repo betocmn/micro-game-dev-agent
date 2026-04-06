@@ -11,11 +11,13 @@ import { generateRunResponseSchema } from "@/lib/schemas";
 import type {
 	AgentEventSummary,
 	AgentRunSummary,
+	GenerationFailureStage,
 	GenerateRunResponse,
 	RobloxEvalSuiteResult,
 	RobloxGameSpec,
 } from "@/types";
 import { ARTIFACT_TYPE, EVAL_PROFILE, HARNESS_VERSION } from "./constants";
+import { HarnessStageError } from "./errors";
 import {
 	deriveRobloxSpecFromPrompt,
 	materializeFallbackProject,
@@ -182,6 +184,17 @@ function createFallbackAgentRun(
 		stopReason: `fallback-${stage}`,
 		permissionDenials: [],
 	};
+}
+
+function toHarnessStageError(
+	stage: GenerationFailureStage,
+	error: unknown,
+): HarnessStageError {
+	if (error instanceof HarnessStageError) {
+		return error;
+	}
+
+	return new HarnessStageError(getErrorMessage(error), stage);
 }
 
 function pathViolatesPolicy(
@@ -499,109 +512,120 @@ export async function generateRobloxRun(
 		runQuery?: QueryFunction;
 	} = {},
 ): Promise<GenerateRunResponse> {
-	const apiKey = ensureAnthropicApiKey();
-	const runQuery = dependencies.runQuery ?? query;
-	const { workspaceDir } = await createRunWorkspace(request.generationId);
-	const templateBundle = await getTemplateBundle();
-	const expectedScaffoldChecksum = getFixedScaffoldChecksum(templateBundle);
-	const fallbackEvents: AgentEventSummary[] = [];
-
-	let specRun: QueryRunResult<RobloxGameSpec> | null = null;
-	let spec = deriveRobloxSpecFromPrompt(request.prompt);
+	let failureStage: GenerationFailureStage = "setup";
 
 	try {
-		specRun = await planRobloxSpec(
-			apiKey,
-			request.prompt,
-			workspaceDir,
-			runQuery,
-		);
-		if (!specRun.structuredOutput) {
-			throw new Error("Planner returned no structured Roblox spec.");
-		}
-		spec = specRun.structuredOutput;
-	} catch (error) {
-		fallbackEvents.push(createFallbackEvent("planner", error));
-	}
+		const apiKey = ensureAnthropicApiKey();
+		const runQuery = dependencies.runQuery ?? query;
+		const { workspaceDir } = await createRunWorkspace(request.generationId);
+		const templateBundle = await getTemplateBundle();
+		const expectedScaffoldChecksum = getFixedScaffoldChecksum(templateBundle);
+		const fallbackEvents: AgentEventSummary[] = [];
 
-	await writeSpecToWorkspace(workspaceDir, spec);
+		failureStage = "expanding";
+		let specRun: QueryRunResult<RobloxGameSpec> | null = null;
+		let spec = deriveRobloxSpecFromPrompt(request.prompt);
 
-	let buildRun: QueryRunResult | null = null;
-	try {
-		buildRun = await materializeProject(
-			apiKey,
-			request.prompt,
-			spec,
-			workspaceDir,
-			runQuery,
-		);
-	} catch (error) {
-		fallbackEvents.push(createFallbackEvent("builder", error));
-		await buildFallbackProject(workspaceDir, spec);
-	}
-
-	let { artifactBundle, evalSuite } = await evaluateBundle(
-		apiKey,
-		request.prompt,
-		spec,
-		workspaceDir,
-		expectedScaffoldChecksum,
-	);
-	let agentRun = getPreferredAgentRun(
-		request.generationId,
-		[buildRun, specRun],
-		"builder",
-	);
-	let events = collectEvents(specRun?.events, buildRun?.events, fallbackEvents);
-
-	if (!evalSuite.artifact.pass || !evalSuite.roblox.pass) {
-		let repairRun: QueryRunResult | null = null;
 		try {
-			repairRun = await materializeProject(
+			specRun = await planRobloxSpec(
+				apiKey,
+				request.prompt,
+				workspaceDir,
+				runQuery,
+			);
+			if (!specRun.structuredOutput) {
+				throw new Error("Planner returned no structured Roblox spec.");
+			}
+			spec = specRun.structuredOutput;
+		} catch (error) {
+			fallbackEvents.push(createFallbackEvent("planner", error));
+		}
+
+		failureStage = "building";
+		await writeSpecToWorkspace(workspaceDir, spec);
+
+		let buildRun: QueryRunResult | null = null;
+		try {
+			buildRun = await materializeProject(
 				apiKey,
 				request.prompt,
 				spec,
 				workspaceDir,
 				runQuery,
-				buildRun?.agentRun.sessionId,
-				evalSuite,
 			);
 		} catch (error) {
-			fallbackEvents.push(createFallbackEvent("repair", error));
+			fallbackEvents.push(createFallbackEvent("builder", error));
 			await buildFallbackProject(workspaceDir, spec);
 		}
 
-		({ artifactBundle, evalSuite } = await evaluateBundle(
+		failureStage = "evaluating";
+		let { artifactBundle, evalSuite } = await evaluateBundle(
 			apiKey,
 			request.prompt,
 			spec,
 			workspaceDir,
 			expectedScaffoldChecksum,
-		));
-		agentRun = getPreferredAgentRun(
+		);
+		let agentRun = getPreferredAgentRun(
 			request.generationId,
-			[repairRun, buildRun, specRun],
-			"repair",
+			[buildRun, specRun],
+			"builder",
 		);
-		events = collectEvents(
-			specRun?.events,
-			buildRun?.events,
-			repairRun?.events,
-			fallbackEvents,
-		);
-	}
+		let events = collectEvents(specRun?.events, buildRun?.events, fallbackEvents);
 
-	return generateRunResponseSchema.parse({
-		spec,
-		artifactBundle: {
-			...artifactBundle,
+		if (!evalSuite.artifact.pass || !evalSuite.roblox.pass) {
+			failureStage = "building";
+			let repairRun: QueryRunResult | null = null;
+			try {
+				repairRun = await materializeProject(
+					apiKey,
+					request.prompt,
+					spec,
+					workspaceDir,
+					runQuery,
+					buildRun?.agentRun.sessionId,
+					evalSuite,
+				);
+			} catch (error) {
+				fallbackEvents.push(createFallbackEvent("repair", error));
+				await buildFallbackProject(workspaceDir, spec);
+			}
+
+			failureStage = "evaluating";
+			({ artifactBundle, evalSuite } = await evaluateBundle(
+				apiKey,
+				request.prompt,
+				spec,
+				workspaceDir,
+				expectedScaffoldChecksum,
+			));
+			agentRun = getPreferredAgentRun(
+				request.generationId,
+				[repairRun, buildRun, specRun],
+				"repair",
+			);
+			events = collectEvents(
+				specRun?.events,
+				buildRun?.events,
+				repairRun?.events,
+				fallbackEvents,
+			);
+		}
+
+		return generateRunResponseSchema.parse({
+			spec,
+			artifactBundle: {
+				...artifactBundle,
+				artifactType: ARTIFACT_TYPE,
+				scaffoldVersion: HARNESS_VERSION,
+			},
+			agentRun,
+			evalSuite,
+			events,
 			artifactType: ARTIFACT_TYPE,
-			scaffoldVersion: HARNESS_VERSION,
-		},
-		agentRun,
-		evalSuite,
-		events,
-		artifactType: ARTIFACT_TYPE,
-		evalProfile: EVAL_PROFILE,
-	});
+			evalProfile: EVAL_PROFILE,
+		});
+	} catch (error) {
+		throw toHarnessStageError(failureStage, error);
+	}
 }

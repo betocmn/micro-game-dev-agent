@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { HarnessStageError } from "./errors";
 import { resolveHarnessWorkerUrl, runHarnessWorker } from "./workerClient";
 
 describe("workerClient", () => {
@@ -96,5 +97,44 @@ describe("workerClient", () => {
 
 		expect(result.evalSuite.summaryScore).toBe(100);
 		expect(fetchImpl).toHaveBeenCalledOnce();
+	});
+
+	it("surfaces worker failure stages from error responses", async () => {
+		const fetchImpl = vi.fn().mockResolvedValue({
+			ok: false,
+			text: async () =>
+				JSON.stringify({
+					error: "Judge timed out",
+					failureStage: "evaluating",
+				}),
+		});
+
+		await expect(
+			runHarnessWorker(
+				{
+					generationId: "generation-1",
+					prompt: "mall hang vibes",
+				},
+				{
+					fetchImpl,
+					url: "https://worker.test",
+				},
+			),
+		).rejects.toMatchObject({
+			message: "Judge timed out",
+			failureStage: "evaluating",
+		});
+		await expect(
+			runHarnessWorker(
+				{
+					generationId: "generation-1",
+					prompt: "mall hang vibes",
+				},
+				{
+					fetchImpl,
+					url: "https://worker.test",
+				},
+			),
+		).rejects.toBeInstanceOf(HarnessStageError);
 	});
 });

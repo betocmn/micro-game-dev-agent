@@ -4,7 +4,6 @@ export const STATUS_COLORS: Record<GenerationStatus, string> = {
 	queued: "bg-gray-600",
 	expanding: "bg-blue-600 animate-pulse",
 	building: "bg-purple-600 animate-pulse",
-	compiling: "bg-indigo-600 animate-pulse",
 	evaluating: "bg-yellow-600 animate-pulse",
 	done: "bg-green-600",
 	failed: "bg-red-600",
@@ -14,7 +13,6 @@ export const STATUS_LABELS: Record<GenerationStatus, string> = {
 	queued: "Queued",
 	expanding: "Planning Roblox spec...",
 	building: "Authoring scaffold...",
-	compiling: "Preparing artifact...",
 	evaluating: "Running proxy evals...",
 	done: "Done",
 	failed: "Failed",
@@ -24,7 +22,6 @@ const FAILURE_STAGE_LABELS: Record<GenerationFailureStage, string> = {
 	setup: "setup",
 	expanding: "spec planning",
 	building: "scaffold authoring",
-	compiling: "artifact preparation",
 	evaluating: "proxy eval worker",
 };
 

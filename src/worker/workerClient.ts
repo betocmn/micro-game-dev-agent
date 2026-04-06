@@ -5,6 +5,7 @@ import {
 	generateRunRequestSchema,
 	generateRunResponseSchema,
 } from "@/lib/schemas";
+import { HarnessStageError, isGenerationFailureStage } from "./errors";
 
 const DEFAULT_HARNESS_WORKER_URL = "http://127.0.0.1:3200";
 
@@ -41,6 +42,34 @@ async function postJson<T>(
 
 	if (!response.ok) {
 		const errorText = await response.text();
+
+		try {
+			const parsedError = JSON.parse(errorText) as {
+				error?: unknown;
+				failureStage?: unknown;
+			};
+
+			if (
+				typeof parsedError.error === "string" &&
+				isGenerationFailureStage(parsedError.failureStage)
+			) {
+				throw new HarnessStageError(
+					parsedError.error,
+					parsedError.failureStage,
+				);
+			}
+
+			if (typeof parsedError.error === "string") {
+				throw new Error(
+					`Harness worker error (${response.status}): ${parsedError.error}`,
+				);
+			}
+		} catch (error) {
+			if (!(error instanceof SyntaxError)) {
+				throw error;
+			}
+		}
+
 		throw new Error(`Harness worker error (${response.status}): ${errorText}`);
 	}
 

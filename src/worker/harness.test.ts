@@ -1,6 +1,7 @@
 import { rm } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { HarnessStageError } from "./errors";
 
 const { runRobloxEvalsMock } = vi.hoisted(() => ({
 	runRobloxEvalsMock: vi.fn(),
@@ -103,5 +104,39 @@ describe("generateRobloxRun", () => {
 		expect(specFile?.content).toContain("Mall Hang Vibes Hangout");
 		expect(serverFile?.content).toContain("RemoteEvent");
 		expect(runRobloxEvalsMock).toHaveBeenCalledOnce();
+	});
+
+	it("tags eval failures with the evaluating stage", async () => {
+		runRobloxEvalsMock.mockRejectedValueOnce(new Error("eval exploded"));
+		const failingQuery = (() => ({
+			close() {},
+			[Symbol.asyncIterator]() {
+				return {
+					async next() {
+						throw new Error("forced sdk failure");
+					},
+				};
+			},
+		})) as unknown as typeof import("@anthropic-ai/claude-agent-sdk").query;
+
+		expect.assertions(2);
+
+		try {
+			await generateRobloxRun(
+				{
+					generationId,
+					prompt: "mall hang vibes",
+				},
+				{
+					runQuery: failingQuery,
+				},
+			);
+		} catch (error) {
+			expect(error).toBeInstanceOf(HarnessStageError);
+			expect(error).toMatchObject({
+				message: "eval exploded",
+				failureStage: "evaluating",
+			});
+		}
 	});
 });
