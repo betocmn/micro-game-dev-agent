@@ -114,7 +114,9 @@ describe("runRobloxJudgeEval", () => {
 		expect(body.messages[0].content).toContain(
 			"Return only the structured JSON grade",
 		);
-		expect(body.messages[1].content).toContain("Original prompt: mall hang vibes");
+		expect(body.messages[1].content).toContain(
+			"Original prompt: mall hang vibes",
+		);
 		expect(body.messages[1].content).toContain("Artifact bundle:");
 		expect(body.messages[1].content).toContain("Proxy eval:");
 	});
@@ -212,8 +214,6 @@ describe("runRobloxJudgeEval", () => {
 		);
 
 		expect(result.summary).toContain("Heuristic fallback judge used");
-		expect(result.criticalMisses).toContain(
-			"Judge fallback: Judge timed out",
-		);
+		expect(result.criticalMisses).toContain("Judge fallback: Judge timed out");
 	});
 });

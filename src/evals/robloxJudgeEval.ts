@@ -129,7 +129,12 @@ export async function runRobloxJudgeEval(
 	artifactBundle: ArtifactBundle,
 	robloxEval: RobloxEvalResult,
 ): Promise<RobloxJudgeEvalResult> {
-	const judgePrompt = createJudgePrompt(prompt, spec, artifactBundle, robloxEval);
+	const judgePrompt = createJudgePrompt(
+		prompt,
+		spec,
+		artifactBundle,
+		robloxEval,
+	);
 	const signal = AbortSignal.timeout(JUDGE_TIMEOUT_MS);
 
 	try {
