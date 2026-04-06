@@ -121,6 +121,10 @@ will:
 - The worker is the deployment boundary that can later move to Fly or Docker.
 - The worker prefers Claude Agent SDK authoring, but it now falls back to deterministic scaffold generation when planner or builder steps time out. Those recoveries are surfaced in the returned `events`.
 
+## Next improvement TODOs
+
+- **Multi-attempt eval repair with variation** — Currently the harness runs one repair pass after eval failure, then falls back to a deterministic scaffold. Replace this with a retry loop (3-5 attempts) that varies temperature, prompt phrasing, or model tier on each attempt, only resorting to the deterministic fallback as a true last resort.
+
 ## Guides
 
 - `docs/guides/agent-harness.md`
