@@ -91,7 +91,7 @@ Weights are:
 - `roblox`: 30
 - `judge`: 40
 
-The judge runs through OpenRouter using `OPENROUTER_API_KEY` and defaults to `openai/gpt-5-mini`. It also has a deterministic fallback so a provider failure does not kill the generation.
+The judge runs through OpenRouter using `OPENROUTER_API_KEY` and uses the internal default model `openai/gpt-5-mini`. It also has a deterministic fallback so a provider failure does not kill the generation.
 
 ### 5. Persist the run
 
@@ -120,6 +120,5 @@ As of April 6, 2026, the current harness codepath expects:
 - `.env.local` is loaded for direct harness calls, `pnpm worker:dev`, and `pnpm benchmark`
 - `ANTHROPIC_API_KEY` for planner, builder, and repair
 - `OPENROUTER_API_KEY` for the Roblox judge
-- `OPENROUTER_JUDGE_MODEL` optionally overrides the default `openai/gpt-5-mini`
 
 That is acceptable for the MVP because the contract, trace surface, and eval surface are all working. The next quality step is improving the Claude-authored hit rate, not replacing the harness shape.

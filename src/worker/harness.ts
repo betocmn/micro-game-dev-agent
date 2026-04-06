@@ -112,11 +112,6 @@ function ensureOpenRouterApiKey(): string {
 	return apiKey;
 }
 
-function resolveRobloxJudgeModel(): string {
-	ensureLocalEnvLoaded();
-	return process.env.OPENROUTER_JUDGE_MODEL || DEFAULT_ROBLOX_JUDGE_MODEL;
-}
-
 function summarizeMessage(message: SDKMessage): AgentEventSummary | null {
 	if (message.type === "tool_use_summary") {
 		return { type: "tool_use_summary", summary: message.summary };
@@ -748,7 +743,7 @@ export async function evaluateRobloxRun(
 
 		failureStage = "evaluating";
 		const judgeApiKey = ensureOpenRouterApiKey();
-		const judgeModel = resolveRobloxJudgeModel();
+		const judgeModel = DEFAULT_ROBLOX_JUDGE_MODEL;
 		let evalSuite = await runRobloxEvals(
 			{ judgeApiKey, judgeModel },
 			request.prompt,

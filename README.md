@@ -58,8 +58,6 @@ Required:
 
 Optional:
 
-- `OPENROUTER_JUDGE_MODEL`
-  Defaults to `openai/gpt-5-mini`.
 - `HARNESS_WORKER_URL`
   Local default is `http://127.0.0.1:3200`.
 

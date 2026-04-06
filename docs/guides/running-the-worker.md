@@ -12,8 +12,6 @@ Set these in `.env.local`:
 
 Optional:
 
-- `OPENROUTER_JUDGE_MODEL`
-  Defaults to `openai/gpt-5-mini`.
 - `HARNESS_WORKER_URL`
 
 As of April 4, 2026, the worker, benchmark CLI, and direct harness entry point all load `.env.local` automatically through `@next/env`.
@@ -76,7 +74,7 @@ As of April 6, 2026, the worker codepath is wired so that:
 
 - planner, builder, and repair use `ANTHROPIC_API_KEY`
 - the Roblox judge uses `OPENROUTER_API_KEY`
-- `OPENROUTER_JUDGE_MODEL` defaults to `openai/gpt-5-mini`
+- the Roblox judge model is hardcoded to `openai/gpt-5-mini`
 - a missing OpenRouter judge key fails the request in the `evaluating` stage
 - judge provider failures fall back to the deterministic heuristic score instead of aborting the run
 
