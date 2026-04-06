@@ -48,6 +48,7 @@ const PLANNER_TIMEOUT_MS = 25000;
 const BUILDER_TIMEOUT_MS = 45000;
 const REPAIR_TIMEOUT_MS = 30000;
 const MUTATING_TOOL_NAMES = new Set(["Edit", "Write", "NotebookEdit"]);
+const DEFAULT_ROBLOX_JUDGE_MODEL = "openai/gpt-5-mini";
 
 type QueryFunction = typeof query;
 
@@ -98,6 +99,22 @@ function ensureAnthropicApiKey(): string {
 		);
 	}
 	return apiKey;
+}
+
+function ensureOpenRouterApiKey(): string {
+	ensureLocalEnvLoaded();
+	const apiKey = process.env.OPENROUTER_API_KEY;
+	if (!apiKey) {
+		throw new Error(
+			"OPENROUTER_API_KEY is not configured for the harness worker.",
+		);
+	}
+	return apiKey;
+}
+
+function resolveRobloxJudgeModel(): string {
+	ensureLocalEnvLoaded();
+	return process.env.OPENROUTER_JUDGE_MODEL || DEFAULT_ROBLOX_JUDGE_MODEL;
 }
 
 function summarizeMessage(message: SDKMessage): AgentEventSummary | null {
@@ -491,7 +508,8 @@ async function buildFallbackProject(
 }
 
 async function evaluateBundle(
-	apiKey: string,
+	judgeApiKey: string,
+	judgeModel: string,
 	prompt: string,
 	spec: RobloxGameSpec,
 	workspaceDir: string,
@@ -499,7 +517,7 @@ async function evaluateBundle(
 ) {
 	const artifactBundle = await loadArtifactBundle(workspaceDir);
 	const evalSuite = await runRobloxEvals(
-		apiKey,
+		{ judgeApiKey, judgeModel },
 		prompt,
 		spec,
 		artifactBundle,
@@ -711,7 +729,7 @@ export async function evaluateRobloxRun(
 	let failureStage: GenerationFailureStage = "setup";
 
 	try {
-		const apiKey = ensureAnthropicApiKey();
+		const anthropicApiKey = ensureAnthropicApiKey();
 		const runQuery = dependencies.runQuery ?? query;
 		const templateBundle = await getTemplateBundle();
 		const expectedScaffoldChecksum = getFixedScaffoldChecksum(templateBundle);
@@ -729,8 +747,10 @@ export async function evaluateRobloxRun(
 		}
 
 		failureStage = "evaluating";
+		const judgeApiKey = ensureOpenRouterApiKey();
+		const judgeModel = resolveRobloxJudgeModel();
 		let evalSuite = await runRobloxEvals(
-			apiKey,
+			{ judgeApiKey, judgeModel },
 			request.prompt,
 			request.spec,
 			artifactBundle,
@@ -746,7 +766,7 @@ export async function evaluateRobloxRun(
 			failureStage = "building";
 			try {
 				repairRun = await materializeProject(
-					apiKey,
+					anthropicApiKey,
 					request.prompt,
 					request.spec,
 					workspaceDir,
@@ -761,7 +781,8 @@ export async function evaluateRobloxRun(
 
 			failureStage = "evaluating";
 			({ artifactBundle, evalSuite } = await evaluateBundle(
-				apiKey,
+				judgeApiKey,
+				judgeModel,
 				request.prompt,
 				request.spec,
 				workspaceDir,

@@ -1,8 +1,4 @@
-import {
-	query,
-	type SDKMessage,
-	type SDKResultMessage,
-} from "@anthropic-ai/claude-agent-sdk";
+import { chatCompletion, extractJSON } from "@/lib/openrouter";
 import { robloxJudgeEvalResultSchema } from "@/lib/schemas";
 import type {
 	ArtifactBundle,
@@ -10,22 +6,10 @@ import type {
 	RobloxGameSpec,
 	RobloxJudgeEvalResult,
 } from "@/types";
-import { robloxJudgeJsonSchema } from "@/worker/jsonSchemas";
 
-const SDK_CLIENT_APP = "caracas-v4/0.1.0";
 const JUDGE_TIMEOUT_MS = 20000;
-
-function getResultMessage(messages: SDKMessage[]): SDKResultMessage {
-	const result = messages.find(
-		(message): message is SDKResultMessage => message.type === "result",
-	);
-
-	if (!result) {
-		throw new Error("Claude judge did not return a result message.");
-	}
-
-	return result;
-}
+const DEFAULT_FALLBACK_SUMMARY =
+	"Heuristic fallback judge used after LLM judge failure. Scores reflect proxy Roblox fit, prompt coverage, social-loop strength, and clarity.";
 
 function scoreToRange(score: number): number {
 	return Math.max(1, Math.min(5, Math.round(score)));
@@ -114,70 +98,63 @@ function createFallbackJudgeResult(
 		promptFidelity,
 		socialLoopQuality,
 		clarity,
-		summary:
-			"Heuristic fallback judge used after Claude judge failure. Scores reflect proxy Roblox fit, prompt coverage, social-loop strength, and clarity.",
-		criticalMisses: [
-			...criticalMisses,
-			`Claude judge fallback: ${errorMessage}`,
-		],
+		summary: DEFAULT_FALLBACK_SUMMARY,
+		criticalMisses: [...criticalMisses, `Judge fallback: ${errorMessage}`],
 	});
 }
 
-export async function runRobloxJudgeEval(
-	apiKey: string,
+function createJudgePrompt(
 	prompt: string,
 	spec: RobloxGameSpec,
 	artifactBundle: ArtifactBundle,
 	robloxEval: RobloxEvalResult,
-): Promise<RobloxJudgeEvalResult> {
-	const responseMessages: SDKMessage[] = [];
-	const judgePrompt = [
+): string {
+	return [
 		"You are grading whether a generated Roblox scaffold matches a vague teen prompt.",
 		"Score from 1 to 5 on Roblox fit, prompt fidelity, social loop quality, and clarity.",
 		"Use the provided spec, artifact files, and proxy eval results.",
+		"Return only valid JSON with these keys: robloxFit, promptFidelity, socialLoopQuality, clarity, summary, criticalMisses.",
 		`Original prompt: ${prompt}`,
 		`Expanded spec:\n${JSON.stringify(spec, null, 2)}`,
 		`Artifact bundle:\n${JSON.stringify(artifactBundle, null, 2)}`,
 		`Proxy eval:\n${JSON.stringify(robloxEval, null, 2)}`,
 	].join("\n\n");
-	const abortController = new AbortController();
-	const queryRun = query({
-		prompt: judgePrompt,
-		options: {
-			abortController,
-			cwd: process.cwd(),
-			env: {
-				...process.env,
-				ANTHROPIC_API_KEY: apiKey,
-				CLAUDE_AGENT_SDK_CLIENT_APP: SDK_CLIENT_APP,
-			},
-			maxTurns: 3,
-			model: "claude-sonnet-4-5",
-			outputFormat: {
-				type: "json_schema",
-				schema: robloxJudgeJsonSchema,
-			},
-			permissionMode: "plan",
-			systemPrompt:
-				"You evaluate Roblox scaffold artifacts. Return only the structured grade and do not ask follow-up questions.",
-			tools: [],
-		},
-	});
-	const timeout = setTimeout(() => {
-		abortController.abort("Judge timed out");
-	}, JUDGE_TIMEOUT_MS);
+}
+
+export async function runRobloxJudgeEval(
+	judgeApiKey: string,
+	judgeModel: string,
+	prompt: string,
+	spec: RobloxGameSpec,
+	artifactBundle: ArtifactBundle,
+	robloxEval: RobloxEvalResult,
+): Promise<RobloxJudgeEvalResult> {
+	const judgePrompt = createJudgePrompt(prompt, spec, artifactBundle, robloxEval);
+	const signal = AbortSignal.timeout(JUDGE_TIMEOUT_MS);
 
 	try {
-		for await (const message of queryRun) {
-			responseMessages.push(message);
-		}
-
-		const result = getResultMessage(responseMessages);
-		if (result.subtype !== "success") {
-			throw new Error(result.errors.join("; ") || "Claude judge failed.");
-		}
-
-		return robloxJudgeEvalResultSchema.parse(result.structured_output);
+		const response = await chatCompletion(judgeApiKey, {
+			model: judgeModel,
+			messages: [
+				{
+					role: "system",
+					content:
+						"You evaluate Roblox scaffold artifacts. Return only the structured JSON grade and do not ask follow-up questions.",
+				},
+				{
+					role: "user",
+					content: judgePrompt,
+				},
+			],
+			temperature: 0.2,
+			maxTokens: 1024,
+			signal,
+			responseFormat: {
+				type: "json_object",
+			},
+		});
+		const parsed = JSON.parse(extractJSON(response));
+		return robloxJudgeEvalResultSchema.parse(parsed);
 	} catch (error) {
 		return createFallbackJudgeResult(
 			error,
@@ -186,13 +163,5 @@ export async function runRobloxJudgeEval(
 			artifactBundle,
 			robloxEval,
 		);
-	} finally {
-		clearTimeout(timeout);
-		if (
-			abortController.signal.aborted &&
-			typeof (queryRun as { close?: () => void }).close === "function"
-		) {
-			(queryRun as { close: () => void }).close();
-		}
 	}
 }

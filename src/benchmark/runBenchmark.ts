@@ -64,6 +64,9 @@ async function main() {
 	if (!process.env.ANTHROPIC_API_KEY) {
 		throw new Error("ANTHROPIC_API_KEY must be set before running benchmarks.");
 	}
+	if (!process.env.OPENROUTER_API_KEY) {
+		throw new Error("OPENROUTER_API_KEY must be set before running benchmarks.");
+	}
 
 	await mkdir(BENCHMARK_DIR, { recursive: true });
 

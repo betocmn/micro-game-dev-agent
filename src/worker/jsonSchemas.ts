@@ -57,30 +57,6 @@ export const robloxGameSpecJsonSchema = {
 	},
 } as const;
 
-export const robloxJudgeJsonSchema = {
-	type: "object",
-	additionalProperties: false,
-	required: [
-		"robloxFit",
-		"promptFidelity",
-		"socialLoopQuality",
-		"clarity",
-		"summary",
-		"criticalMisses",
-	],
-	properties: {
-		robloxFit: { type: "integer", minimum: 1, maximum: 5 },
-		promptFidelity: { type: "integer", minimum: 1, maximum: 5 },
-		socialLoopQuality: { type: "integer", minimum: 1, maximum: 5 },
-		clarity: { type: "integer", minimum: 1, maximum: 5 },
-		summary: { type: "string" },
-		criticalMisses: {
-			type: "array",
-			items: { type: "string" },
-		},
-	},
-} as const;
-
 export const harnessMetadata = {
 	harnessVersion: HARNESS_VERSION,
 	evalProfile: EVAL_PROFILE,

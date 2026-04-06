@@ -7,6 +7,11 @@ import { runArtifactEval } from "./artifactEval";
 import { runRobloxEval } from "./robloxEval";
 import { runRobloxJudgeEval } from "./robloxJudgeEval";
 
+interface RobloxJudgeConfig {
+	judgeApiKey: string;
+	judgeModel: string;
+}
+
 function getJudgeScore(result: RobloxEvalSuiteResult["judge"]): number {
 	const judgeAverage =
 		(result.robloxFit +
@@ -19,7 +24,7 @@ function getJudgeScore(result: RobloxEvalSuiteResult["judge"]): number {
 }
 
 export async function runRobloxEvals(
-	apiKey: string,
+	judgeConfig: RobloxJudgeConfig,
 	prompt: string,
 	spec: RobloxGameSpec,
 	artifactBundle: ArtifactBundle,
@@ -31,7 +36,8 @@ export async function runRobloxEvals(
 	);
 	const roblox = await runRobloxEval(prompt, spec, artifactBundle);
 	const judge = await runRobloxJudgeEval(
-		apiKey,
+		judgeConfig.judgeApiKey,
+		judgeConfig.judgeModel,
 		prompt,
 		spec,
 		artifactBundle,
