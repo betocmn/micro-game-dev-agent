@@ -22,6 +22,10 @@ interface ChatCompletionOptions {
 	messages: ChatMessage[];
 	temperature?: number;
 	maxTokens?: number;
+	signal?: AbortSignal;
+	responseFormat?: {
+		type: "json_object";
+	};
 }
 
 interface ChatCompletionResponse {
@@ -41,6 +45,8 @@ export async function chatCompletion(
 		messages,
 		temperature = 0.7,
 		maxTokens = 4096,
+		signal,
+		responseFormat,
 	} = options;
 
 	const response = await fetch(`${OPENROUTER_BASE_URL}/chat/completions`, {
@@ -51,11 +57,13 @@ export async function chatCompletion(
 			"HTTP-Referer": "https://3words.game",
 			"X-Title": "3 Words to Game",
 		},
+		signal,
 		body: JSON.stringify({
 			model,
 			messages,
 			temperature,
 			max_tokens: maxTokens,
+			...(responseFormat ? { response_format: responseFormat } : {}),
 		}),
 	});
 

@@ -91,7 +91,7 @@ Weights are:
 - `roblox`: 30
 - `judge`: 40
 
-The judge prefers Claude, but it also has a deterministic fallback so a judge timeout does not kill the generation.
+The judge runs through OpenRouter using `OPENROUTER_API_KEY` and uses the internal default model `openai/gpt-5-mini`. It also has a deterministic fallback so a provider failure does not kill the generation.
 
 ### 5. Persist the run
 
@@ -113,12 +113,12 @@ The UI reads those records and renders:
 
 ## Why the fallback exists
 
-The repo is Anthropic-native, but the current planner and builder can still time out on short prompts. The fallback path is there to guarantee a complete run and make the failure mode measurable instead of opaque.
+The repo still uses Anthropic Agent SDK for planner, builder, and repair, but the judge is now a separate OpenRouter GPT call. The fallback path is there to guarantee a complete run and make the failure mode measurable instead of opaque.
 
-As of April 4, 2026, the verified behavior is:
+As of April 6, 2026, the current harness codepath expects:
 
 - `.env.local` is loaded for direct harness calls, `pnpm worker:dev`, and `pnpm benchmark`
-- end-to-end generation succeeds with `ANTHROPIC_API_KEY`
-- short prompts like `mall hang vibes` currently tend to complete through deterministic fallback after planner and builder timeouts
+- `ANTHROPIC_API_KEY` for planner, builder, and repair
+- `OPENROUTER_API_KEY` for the Roblox judge
 
 That is acceptable for the MVP because the contract, trace surface, and eval surface are all working. The next quality step is improving the Claude-authored hit rate, not replacing the harness shape.

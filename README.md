@@ -1,6 +1,6 @@
 # Roblox Harness MVP
 
-This repo is now an Anthropic-native agent harness MVP for vague Roblox prompts.
+This repo is now a Roblox harness MVP that uses Anthropic Agent SDK for authoring and OpenRouter GPT judging on vague Roblox prompts.
 
 Type a prompt like `mall hang vibes` and the system:
 - expands intent into a strict `RobloxGameSpec`
@@ -18,7 +18,7 @@ The old HTML5 canvas pipeline remains in the repo as legacy reference only. It i
 | State and orchestration | Convex |
 | Agent runtime | `@anthropic-ai/claude-agent-sdk` |
 | Artifact target | Rojo-style Roblox scaffold + Luau |
-| Evals | Proxy artifact eval + proxy Roblox eval + Claude judge |
+| Evals | Proxy artifact eval + proxy Roblox eval + OpenRouter GPT judge |
 
 ## Live flow
 
@@ -27,7 +27,7 @@ The old HTML5 canvas pipeline remains in the repo as legacy reference only. It i
 3. The worker creates `.context/runs/<generationId>/workspace` from the fixed scaffold.
 4. Claude Agent SDK plans a `RobloxGameSpec`, edits the allowed files, and records session metadata.
 5. Convex persists the initial artifact bundle plus the materialization trace, then calls `POST /runs/evaluate`.
-6. Proxy evals score scaffold correctness and Roblox/social-fit heuristics, including a repair pass when needed.
+6. Proxy evals score scaffold correctness and Roblox/social-fit heuristics, and the judge step runs through OpenRouter with `openai/gpt-5-mini` by default.
 7. Convex persists the final artifact bundle, agent runs, agent events, and eval rows.
 8. The UI shows the file tree, trace summary, and benchmark score.
 
@@ -54,6 +54,7 @@ Required:
 
 - `NEXT_PUBLIC_CONVEX_URL`
 - `ANTHROPIC_API_KEY`
+- `OPENROUTER_API_KEY`
 
 Optional:
 
@@ -119,7 +120,8 @@ will:
 - The live artifact is a Roblox scaffold, not a playable browser game.
 - Evals are proxy checks; there is no Roblox Studio automation in this MVP.
 - The worker is the deployment boundary that can later move to Fly or Docker.
-- The worker prefers Claude Agent SDK authoring, but it now falls back to deterministic scaffold generation when planner or builder steps time out. Those recoveries are surfaced in the returned `events`.
+- Planner, builder, and repair still run through Claude Agent SDK. The Roblox judge now runs through OpenRouter GPT and falls back to a deterministic heuristic when the provider call fails.
+- The worker still falls back to deterministic scaffold generation when planner or builder steps time out. Those recoveries are surfaced in the returned `events`.
 
 ## Guides
 
