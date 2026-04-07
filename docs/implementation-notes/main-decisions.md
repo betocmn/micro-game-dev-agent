@@ -57,9 +57,9 @@ All four checks must pass. This is a pure deterministic eval with no LLM involve
 
 All four checks must pass. Also deterministic with no LLM involvement.
 
-**Judge eval (40 points)** — Qualitative assessment using Claude as a judge:
+**Judge eval (40 points)** — Qualitative assessment using an LLM as a judge:
 
-- Calls Claude Sonnet via the Agent SDK with `json_schema` output format
+- Calls OpenRouter GPT via `chatCompletion()` with JSON output parsing
 - Scores four dimensions 1-5: `robloxFit`, `promptFidelity`, `socialLoopQuality`, `clarity`
 - The average is normalized to 40 points: `Math.round((average / 5) * 40)`
 - Receives the roblox eval results as input so the judge has grounded evidence
@@ -81,7 +81,7 @@ Every generation always completes. The repair agent gets the eval failure JSON a
 
 - [`src/evals/artifactEval.ts`](../../src/evals/artifactEval.ts) — Artifact eval implementation
 - [`src/evals/robloxEval.ts`](../../src/evals/robloxEval.ts) — Roblox eval implementation
-- [`src/evals/robloxJudgeEval.ts`](../../src/evals/robloxJudgeEval.ts) — Judge eval with Claude call and deterministic fallback
+- [`src/evals/robloxJudgeEval.ts`](../../src/evals/robloxJudgeEval.ts) — Judge eval with OpenRouter GPT call and deterministic fallback
 - [`src/evals/robloxRunEvals.ts`](../../src/evals/robloxRunEvals.ts) — Orchestrator that runs all three and computes `summaryScore`
 - [`src/worker/constants.ts`](../../src/worker/constants.ts) — `REQUIRED_ARTIFACT_FILES`, `EDITABLE_ARTIFACT_FILES`, `FORBIDDEN_LUA_PATTERNS`
 - [`src/types.ts`](../../src/types.ts) — `ArtifactEvalResult` (lines 68-76), `RobloxEvalResult` (lines 78-86), `RobloxJudgeEvalResult` (lines 88-95), `RobloxEvalSuiteResult` (lines 97-102)
@@ -283,7 +283,7 @@ The system is designed to never fail silently. At every stage where an LLM call 
 | Spec planning | Claude planner agent | `deriveRobloxSpecFromPrompt()` — keyword heuristics |
 | Scaffold authoring | Claude builder agent | `materializeFallbackProject()` — template Luau code |
 | Eval repair | Claude repair agent | `materializeFallbackProject()` again |
-| Judge scoring | Claude judge call | `createFallbackJudgeResult()` — heuristic scoring |
+| Judge scoring | OpenRouter GPT judge call | `createFallbackJudgeResult()` — heuristic scoring |
 
 Fallback usage is always recorded as an event with type `"fallback"` so it's visible in the UI trace. This means every generation completes — the system degrades gracefully rather than failing catastrophically.
 
@@ -324,7 +324,7 @@ The codebase uses a triple-schema pattern to maintain type safety across process
 |--------|---------|---------|
 | TypeScript `interface` | Compile-time type checking | All source files |
 | Zod schema | Runtime validation at API boundaries | Worker requests/responses, Convex I/O, UI parsing |
-| JSON Schema object | Claude SDK `outputFormat` for structured output | Planner and judge agent calls |
+| JSON Schema object | Claude SDK `outputFormat` for structured output | Planner agent call |
 
 The same logical type (e.g., `RobloxGameSpec`) is defined in three places because each consumer needs a different format. TypeScript interfaces can't validate at runtime, Zod can't be passed to the Claude SDK, and JSON Schema objects don't provide TypeScript types.
 
