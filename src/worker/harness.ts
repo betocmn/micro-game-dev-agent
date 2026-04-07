@@ -44,9 +44,9 @@ import {
 
 const SDK_MODEL = "claude-sonnet-4-5";
 const SDK_CLIENT_APP = "caracas-v4/0.1.0";
-const PLANNER_TIMEOUT_MS = 25000;
-const BUILDER_TIMEOUT_MS = 45000;
-const REPAIR_TIMEOUT_MS = 30000;
+const PLANNER_TIMEOUT_MS = 60000;
+const BUILDER_TIMEOUT_MS = 120000;
+const REPAIR_TIMEOUT_MS = 90000;
 const MUTATING_TOOL_NAMES = new Set(["Edit", "Write", "NotebookEdit"]);
 const DEFAULT_ROBLOX_JUDGE_MODEL = "openai/gpt-5-mini";
 
