@@ -128,7 +128,7 @@ export default function GenerationPage({
 				)}
 			</div>
 
-			<div className="grid gap-6 xl:grid-cols-[minmax(0,1.9fr)_340px]">
+			<div className="grid gap-6 xl:grid-cols-[minmax(0,1.9fr)_minmax(0,340px)]">
 				<div className="space-y-6">
 					<div className="rounded-2xl border border-gray-800 bg-gray-950">
 						<div className="border-b border-gray-800 p-4">
@@ -316,7 +316,7 @@ export default function GenerationPage({
 							{parsedEvalRuns.map(({ evalRun, artifact, roblox, judge }) => (
 								<div
 									key={evalRun._id}
-									className="rounded-xl border border-gray-800 bg-gray-900/40 p-3 text-sm text-gray-300"
+									className="overflow-hidden rounded-xl border border-gray-800 bg-gray-900/40 p-3 text-sm text-gray-300"
 								>
 									<div className="mb-2 flex items-center justify-between">
 										<span className="font-medium capitalize text-white">
@@ -367,7 +367,7 @@ export default function GenerationPage({
 												{judge.socialLoopQuality}/5 &middot; Clarity{" "}
 												{judge.clarity}/5
 											</div>
-											<div>{judge.summary}</div>
+											<div className="break-words">{judge.summary}</div>
 										</div>
 									)}
 								</div>
