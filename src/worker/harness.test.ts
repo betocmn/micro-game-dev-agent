@@ -15,6 +15,7 @@ import {
 	evaluateRobloxRun,
 	generateRobloxRun,
 	getWorkspaceToolViolation,
+	materializeRobloxRun,
 } from "./harness";
 
 describe("generateRobloxRun", () => {
@@ -143,6 +144,162 @@ describe("generateRobloxRun", () => {
 				failureStage: "evaluating",
 			});
 		}
+	});
+
+	it("captures assistant trace payloads with full model text", async () => {
+		const plannedSpec = {
+			title: "Mall Hang Vibes Hangout",
+			experienceType: "hangout" as const,
+			fantasy: "After-school mall hangout",
+			coreLoop: "Meet up and emote together",
+			socialLoop: "Players invite friends to shared dance spots",
+			progressionHook: "Earn style tokens for hanging out in groups",
+			serverAuthoritativeRules: ["server owns rewards"],
+			clientFeedback: ["show dance prompts"],
+			worldObjects: [
+				{
+					name: "Dance Floor",
+					purpose: "group activity",
+					placement: "center",
+				},
+			],
+			acceptanceTests: ["players can discover a shared activity quickly"],
+		};
+
+		let callCount = 0;
+		const scriptedQuery = (({
+			options,
+		}: Parameters<
+			typeof import("@anthropic-ai/claude-agent-sdk").query
+		>[0]) => {
+			callCount += 1;
+
+			if (callCount === 1) {
+				return {
+					close() {},
+					async *[Symbol.asyncIterator]() {
+						yield {
+							type: "assistant",
+							message: {
+								content: [
+									{
+										type: "text",
+										text: "Planned a mall hangout with a shared dance loop.",
+									},
+								],
+							},
+							parent_tool_use_id: null,
+							uuid: "assistant-plan",
+							session_id: "session-plan",
+						};
+						yield {
+							type: "result",
+							subtype: "success",
+							duration_ms: 1,
+							duration_api_ms: 1,
+							is_error: false,
+							num_turns: 1,
+							result: "Planner finished.",
+							stop_reason: "end_turn",
+							total_cost_usd: 0,
+							usage: { input_tokens: 1, output_tokens: 1 },
+							modelUsage: {},
+							permission_denials: [],
+							structured_output: plannedSpec,
+							uuid: "result-plan",
+							session_id: "session-plan",
+						};
+					},
+				};
+			}
+
+			expect(options?.agent).toBe("rojo_builder");
+
+			return {
+				close() {},
+				async *[Symbol.asyncIterator]() {
+					yield {
+						type: "system",
+						subtype: "task_progress",
+						task_id: "task-1",
+						description: "Editing scaffold files",
+						summary: "Updated server and client scripts.",
+						usage: {
+							total_tokens: 10,
+							tool_uses: 2,
+							duration_ms: 100,
+						},
+						uuid: "task-progress",
+						session_id: "session-build",
+					};
+					yield {
+						type: "assistant",
+						message: {
+							content: [
+								{
+									type: "text",
+									text: "Implemented the dance loop and synced rewards on the server.",
+								},
+							],
+						},
+						parent_tool_use_id: null,
+						uuid: "assistant-build",
+						session_id: "session-build",
+					};
+					yield {
+						type: "result",
+						subtype: "success",
+						duration_ms: 1,
+						duration_api_ms: 1,
+						is_error: false,
+						num_turns: 2,
+						result: "Builder finished.",
+						stop_reason: "end_turn",
+						total_cost_usd: 0,
+						usage: { input_tokens: 1, output_tokens: 1 },
+						modelUsage: {},
+						permission_denials: [],
+						uuid: "result-build",
+						session_id: "session-build",
+					};
+				},
+			};
+		}) as unknown as typeof import("@anthropic-ai/claude-agent-sdk").query;
+
+		const result = await materializeRobloxRun(
+			{
+				generationId,
+				prompt: "mall hang vibes",
+			},
+			{
+				runQuery: scriptedQuery,
+			},
+		);
+
+		expect(result.events).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({
+					type: "assistant",
+					summary: "Planned a mall hangout with a shared dance loop.",
+					payload: expect.stringContaining(
+						'"text":"Planned a mall hangout with a shared dance loop."',
+					),
+				}),
+				expect.objectContaining({
+					type: "task_progress",
+					summary: "Updated server and client scripts.",
+					payload: expect.stringContaining('"subtype":"task_progress"'),
+				}),
+				expect.objectContaining({
+					type: "assistant",
+					summary:
+						"Implemented the dance loop and synced rewards on the server.",
+					payload: expect.stringContaining(
+						'"text":"Implemented the dance loop and synced rewards on the server."',
+					),
+				}),
+			]),
+		);
 	});
 });
 

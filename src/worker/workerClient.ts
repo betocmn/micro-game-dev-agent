@@ -9,8 +9,11 @@ import {
 import { HarnessStageError, isGenerationFailureStage } from "./errors";
 
 const DEFAULT_HARNESS_WORKER_URL = "http://127.0.0.1:3200";
-const DEFAULT_REQUEST_TIMEOUT_MS = 120000;
-const GENERATE_REQUEST_TIMEOUT_MS = 180000;
+// Transport budgets need to exceed the sequential stage timers inside the worker.
+const DEFAULT_REQUEST_TIMEOUT_MS = 300000;
+const MATERIALIZE_REQUEST_TIMEOUT_MS = 480000;
+const EVALUATE_REQUEST_TIMEOUT_MS = 300000;
+const GENERATE_REQUEST_TIMEOUT_MS = 720000;
 
 export type HarnessGenerateRequest = z.infer<typeof generateRunRequestSchema>;
 export type HarnessMaterializeRequest = z.infer<
@@ -24,6 +27,15 @@ export function resolveHarnessWorkerUrl(explicitUrl?: string): string {
 	);
 }
 
+function isAbortLikeError(error: unknown): boolean {
+	if (!error || typeof error !== "object" || !("name" in error)) {
+		return false;
+	}
+
+	const name = (error as { name: unknown }).name;
+	return name === "AbortError" || name === "TimeoutError";
+}
+
 async function postJson<T>(
 	pathname: string,
 	payload: unknown,
@@ -35,19 +47,28 @@ async function postJson<T>(
 	},
 ): Promise<T> {
 	const fetchImpl = options.fetchImpl ?? fetch;
-	const response = await fetchImpl(
-		`${resolveHarnessWorkerUrl(options.url)}${pathname}`,
-		{
-			method: "POST",
-			headers: {
-				"Content-Type": "application/json",
+	const timeoutMs = options.timeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
+	let response: Response;
+
+	try {
+		response = await fetchImpl(
+			`${resolveHarnessWorkerUrl(options.url)}${pathname}`,
+			{
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify(payload),
+				signal: AbortSignal.timeout(timeoutMs),
 			},
-			body: JSON.stringify(payload),
-			signal: AbortSignal.timeout(
-				options.timeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS,
-			),
-		},
-	);
+		);
+	} catch (error) {
+		if (isAbortLikeError(error)) {
+			throw new Error(`Harness worker request timed out after ${timeoutMs}ms.`);
+		}
+
+		throw error;
+	}
 
 	if (!response.ok) {
 		const errorText = await response.text();
@@ -107,12 +128,10 @@ export async function runHarnessMaterialization(
 	} = {},
 ) {
 	const payload = generateRunRequestSchema.parse(request);
-	return postJson(
-		"/runs/materialize",
-		payload,
-		materializeRunResponseSchema,
-		options,
-	);
+	return postJson("/runs/materialize", payload, materializeRunResponseSchema, {
+		...options,
+		timeoutMs: MATERIALIZE_REQUEST_TIMEOUT_MS,
+	});
 }
 
 export async function runHarnessEvaluation(
@@ -123,10 +142,8 @@ export async function runHarnessEvaluation(
 	} = {},
 ) {
 	const payload = evaluateRunRequestSchema.parse(request);
-	return postJson(
-		"/runs/evaluate",
-		payload,
-		evaluateRunResponseSchema,
-		options,
-	);
+	return postJson("/runs/evaluate", payload, evaluateRunResponseSchema, {
+		...options,
+		timeoutMs: EVALUATE_REQUEST_TIMEOUT_MS,
+	});
 }
