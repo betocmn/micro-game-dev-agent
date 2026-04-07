@@ -115,17 +115,14 @@ will:
 2. write a timestamped JSON report into `.context/benchmarks/`
 3. compare the new average score with the most recent benchmark for the same eval profile
 
-## Notes
+## Main decisions
 
-- The live artifact is a Roblox scaffold, not a playable browser game.
-- Evals are proxy checks; there is no Roblox Studio automation in this MVP.
-- The worker is the deployment boundary that can later move to Fly or Docker.
-- Planner, builder, and repair still run through Claude Agent SDK. The Roblox judge now runs through OpenRouter GPT and falls back to a deterministic heuristic when the provider call fails.
-- The worker still falls back to deterministic scaffold generation when planner or builder steps time out. Those recoveries are surfaced in the returned `events`.
+See [docs/implementation-notes/main-decisions.md](docs/implementation-notes/main-decisions.md) for core concepts, design decisions, and implementation details.
 
 ## Next improvement TODOs
 
 - **Multi-attempt eval repair with variation** — Currently the harness runs one repair pass after eval failure, then falls back to a deterministic scaffold. Replace this with a retry loop (3-5 attempts) that varies temperature, prompt phrasing, or model tier on each attempt, only resorting to the deterministic fallback as a true last resort.
+- **Roblox Studio integration for live generation** — Connect the pipeline directly to Roblox Studio so generated scaffolds can be loaded, tested, and iterated on inside the actual engine rather than relying solely on proxy evals.
 
 ## Guides
 
