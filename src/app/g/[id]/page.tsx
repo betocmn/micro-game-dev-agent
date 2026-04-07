@@ -129,7 +129,7 @@ export default function GenerationPage({
 			</div>
 
 			<div className="grid gap-6 xl:grid-cols-[minmax(0,1.9fr)_minmax(0,340px)]">
-				<div className="space-y-6">
+				<div className="min-w-0 space-y-6">
 					<div className="rounded-2xl border border-gray-800 bg-gray-950">
 						<div className="border-b border-gray-800 p-4">
 							<h2 className="text-sm font-semibold uppercase tracking-[0.2em] text-gray-400">
@@ -155,7 +155,7 @@ export default function GenerationPage({
 														: "border-gray-800 bg-gray-950 text-gray-300 hover:border-gray-600"
 												}`}
 											>
-												<div className="font-medium">{file.path}</div>
+												<div className="break-all font-medium">{file.path}</div>
 												<div className="mt-1 text-xs text-gray-500">
 													{file.editable ? "editable" : "fixed"} &middot;{" "}
 													{file.language}
@@ -233,13 +233,13 @@ export default function GenerationPage({
 					</div>
 				</div>
 
-				<div className="space-y-6">
+				<div className="min-w-0 space-y-6">
 					{spec && (
 						<div className="rounded-2xl border border-gray-800 bg-gray-950 p-4">
 							<h2 className="mb-3 text-sm font-semibold uppercase tracking-[0.2em] text-gray-400">
 								Roblox Spec
 							</h2>
-							<div className="space-y-3 text-sm text-gray-300">
+							<div className="space-y-3 break-words text-sm text-gray-300">
 								<div>
 									<span className="text-gray-500">Title:</span> {spec.title}
 								</div>
@@ -273,7 +273,7 @@ export default function GenerationPage({
 							Latest Agent Run
 						</h2>
 						{latestAgentRun ? (
-							<div className="space-y-3 text-sm text-gray-300">
+							<div className="space-y-3 break-all text-sm text-gray-300">
 								<div>
 									<span className="text-gray-500">Session:</span>{" "}
 									{latestAgentRun.sessionId}
