@@ -111,7 +111,7 @@ describe("workerClient", () => {
 
 		expect(result.evalSuite.summaryScore).toBe(100);
 		expect(fetchImpl).toHaveBeenCalledOnce();
-		expect(timeoutSpy).toHaveBeenCalledWith(180000);
+		expect(timeoutSpy).toHaveBeenCalledWith(720000);
 	});
 
 	it("posts materialize requests and returns parsed results", async () => {
@@ -147,7 +147,7 @@ describe("workerClient", () => {
 
 		expect(result.resumeSessionId).toBe("session-1");
 		expect(fetchImpl).toHaveBeenCalledOnce();
-		expect(timeoutSpy).toHaveBeenCalledWith(120000);
+		expect(timeoutSpy).toHaveBeenCalledWith(480000);
 	});
 
 	it("posts evaluation requests and returns parsed results", async () => {
@@ -206,7 +206,28 @@ describe("workerClient", () => {
 
 		expect(result.artifactBundle.files).toHaveLength(1);
 		expect(fetchImpl).toHaveBeenCalledOnce();
-		expect(timeoutSpy).toHaveBeenCalledWith(120000);
+		expect(timeoutSpy).toHaveBeenCalledWith(300000);
+	});
+
+	it("rewrites fetch aborts into timeout errors", async () => {
+		const fetchImpl = vi.fn().mockRejectedValue(
+			Object.assign(new Error("request aborted"), {
+				name: "AbortError",
+			}),
+		);
+
+		await expect(
+			runHarnessMaterialization(
+				{
+					generationId: "generation-1",
+					prompt: "mall hang vibes",
+				},
+				{
+					fetchImpl,
+					url: "https://worker.test",
+				},
+			),
+		).rejects.toThrow("Harness worker request timed out after 480000ms.");
 	});
 
 	it("surfaces worker failure stages from error responses", async () => {
