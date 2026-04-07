@@ -8,7 +8,7 @@ Type a prompt like `mall hang vibes` and the system:
 - persists the artifact bundle, agent trace, and evals in Convex
 - renders the files and scores in the Next.js UI
 
-The old HTML5 canvas pipeline remains in the repo as legacy reference only. It is no longer the live path.
+The codebase now contains only the Roblox generation and evaluation flow.
 
 ## Stack
 

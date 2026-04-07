@@ -11,6 +11,8 @@
 
 const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
 const DEFAULT_MODEL = "anthropic/claude-sonnet-4";
+const DEFAULT_HTTP_REFERER = "http://localhost:3000";
+const DEFAULT_APP_TITLE = "Roblox Harness MVP";
 
 interface ChatMessage {
 	role: "system" | "user" | "assistant";
@@ -54,8 +56,8 @@ export async function chatCompletion(
 		headers: {
 			Authorization: `Bearer ${apiKey}`,
 			"Content-Type": "application/json",
-			"HTTP-Referer": "https://3words.game",
-			"X-Title": "3 Words to Game",
+			"HTTP-Referer": DEFAULT_HTTP_REFERER,
+			"X-Title": DEFAULT_APP_TITLE,
 		},
 		signal,
 		body: JSON.stringify({

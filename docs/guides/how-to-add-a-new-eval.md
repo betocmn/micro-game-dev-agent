@@ -1,6 +1,6 @@
 # How To Add A New Eval
 
-The live eval harness scores Roblox scaffold artifacts, not browser games.
+The live eval harness scores Roblox scaffold artifacts only.
 
 Current evals:
 

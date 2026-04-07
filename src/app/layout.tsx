@@ -9,8 +9,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-	title: "3 Words to Game",
-	description: "Type 3 words, get a playable game. An agent pipeline MVP.",
+	title: "Roblox Harness MVP",
+	description:
+		"Turn a vague prompt into a Rojo scaffold, trace, and eval suite.",
 };
 
 export default function RootLayout({

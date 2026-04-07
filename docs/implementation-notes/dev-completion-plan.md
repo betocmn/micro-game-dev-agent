@@ -13,7 +13,7 @@ The repo now demonstrates this live loop:
 - scaffold -> proxy eval suite
 - Convex persistence -> reactive UI
 
-The old HTML canvas path is still in the repo only as legacy reference.
+The repo is now Roblox-only; the legacy HTML canvas path has been removed.
 
 ## Verified state
 

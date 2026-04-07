@@ -11,8 +11,6 @@
 		"lint:fix": "biome check --fix .",
 		"test": "vitest run",
 		"test:watch": "vitest",
-		"test:pipeline": "tsx src/pipeline/testPipeline.ts",
-		"test:evals": "tsx src/evals/testEvals.ts",
 		"worker:dev": "tsx watch src/worker/server.ts",
 		"benchmark": "tsx src/benchmark/runBenchmark.ts"
 	},
@@ -21,7 +19,6 @@
 		"@next/env": "^16.2.2",
 		"convex": "^1.34.1",
 		"next": "16.2.2",
-		"playwright": "^1.59.1",
 		"react": "19.2.4",
 		"react-dom": "19.2.4",
 		"zod": "^4.3.6"
@@ -32,7 +29,6 @@
 		"@types/node": "^20",
 		"@types/react": "^19",
 		"@types/react-dom": "^19",
-		"@vitejs/plugin-react": "^6.0.1",
 		"eslint": "^9",
 		"eslint-config-next": "16.2.2",
 		"tailwindcss": "^4",
