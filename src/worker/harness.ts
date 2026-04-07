@@ -8,7 +8,7 @@ import {
 } from "@anthropic-ai/claude-agent-sdk";
 import { runRobloxEvals } from "@/evals/robloxRunEvals";
 import { ensureLocalEnvLoaded } from "@/lib/loadEnv";
-import { isPathWithinDirectory } from "@/lib/runId";
+import { isPathWithinDirectory } from "@/lib/runIdNode";
 import {
 	evaluateRunResponseSchema,
 	generateRunResponseSchema,

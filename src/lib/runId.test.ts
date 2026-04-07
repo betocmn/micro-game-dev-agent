@@ -1,6 +1,6 @@
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { isPathWithinDirectory } from "./runId";
+import { isPathWithinDirectory } from "./runIdNode";
 
 describe("isPathWithinDirectory", () => {
 	const workspaceDir = path.join("/tmp", "workspace");

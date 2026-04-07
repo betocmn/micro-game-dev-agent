@@ -9,7 +9,7 @@ import {
 	writeFile,
 } from "node:fs/promises";
 import path from "node:path";
-import { resolveRunDir } from "@/lib/runId";
+import { resolveRunDir } from "@/lib/runIdNode";
 import { artifactBundleSchema, robloxGameSpecSchema } from "@/lib/schemas";
 import type { ArtifactBundle, ArtifactFile, RobloxGameSpec } from "@/types";
 import {
