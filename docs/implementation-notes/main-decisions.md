@@ -27,9 +27,9 @@ All agent calls go through a single `runClaudeQuery()` function that handles:
 
 ### Key files
 
-- `src/worker/harness.ts` — Agent definitions (lines 65-90), `runClaudeQuery()` (lines 364-431), planner call (lines 512-546), builder call (lines 548-590)
-- `src/worker/jsonSchemas.ts` — JSON Schema objects passed to the SDK's `outputFormat` for structured output
-- `src/types.ts` — `AgentRunSummary` (lines 53-60), `AgentEventSummary` (lines 62-66)
+- [`src/worker/harness.ts`](../../src/worker/harness.ts) — Agent definitions (lines 65-90), `runClaudeQuery()` (lines 364-431), planner call (lines 512-546), builder call (lines 548-590)
+- [`src/worker/jsonSchemas.ts`](../../src/worker/jsonSchemas.ts) — JSON Schema objects passed to the SDK's `outputFormat` for structured output
+- [`src/types.ts`](../../src/types.ts) — `AgentRunSummary` (lines 53-60), `AgentEventSummary` (lines 62-66)
 
 ---
 
@@ -79,12 +79,12 @@ Every generation always completes. The repair agent gets the eval failure JSON a
 
 ### Key files
 
-- `src/evals/artifactEval.ts` — Artifact eval implementation
-- `src/evals/robloxEval.ts` — Roblox eval implementation
-- `src/evals/robloxJudgeEval.ts` — Judge eval with Claude call and deterministic fallback
-- `src/evals/robloxRunEvals.ts` — Orchestrator that runs all three and computes `summaryScore`
-- `src/worker/constants.ts` — `REQUIRED_ARTIFACT_FILES`, `EDITABLE_ARTIFACT_FILES`, `FORBIDDEN_LUA_PATTERNS`
-- `src/types.ts` — `ArtifactEvalResult` (lines 68-76), `RobloxEvalResult` (lines 78-86), `RobloxJudgeEvalResult` (lines 88-95), `RobloxEvalSuiteResult` (lines 97-102)
+- [`src/evals/artifactEval.ts`](../../src/evals/artifactEval.ts) — Artifact eval implementation
+- [`src/evals/robloxEval.ts`](../../src/evals/robloxEval.ts) — Roblox eval implementation
+- [`src/evals/robloxJudgeEval.ts`](../../src/evals/robloxJudgeEval.ts) — Judge eval with Claude call and deterministic fallback
+- [`src/evals/robloxRunEvals.ts`](../../src/evals/robloxRunEvals.ts) — Orchestrator that runs all three and computes `summaryScore`
+- [`src/worker/constants.ts`](../../src/worker/constants.ts) — `REQUIRED_ARTIFACT_FILES`, `EDITABLE_ARTIFACT_FILES`, `FORBIDDEN_LUA_PATTERNS`
+- [`src/types.ts`](../../src/types.ts) — `ArtifactEvalResult` (lines 68-76), `RobloxEvalResult` (lines 78-86), `RobloxJudgeEvalResult` (lines 88-95), `RobloxEvalSuiteResult` (lines 97-102)
 
 ---
 
@@ -94,20 +94,20 @@ The system generates Roblox game projects using a fixed scaffold with constraine
 
 ### Scaffold structure
 
-The template lives at `src/worker/template/` and contains 6 files:
+The template lives at [`src/worker/template/`](../../src/worker/template/) and contains 6 files:
 
 | File | Editable | Purpose |
 |------|----------|---------|
-| `default.project.json` | No | Rojo config mapping folders to Roblox services |
-| `README.generated.md` | No | Documentation for the generated project |
-| `src/server/Mechanic.server.luau` | Yes | Server-side game logic |
-| `src/client/Mechanic.client.luau` | Yes | Client-side game logic |
-| `src/shared/GameSpec.json` | Yes | The game design specification |
-| `src/shared/MechanicContract.luau` | No | Fixed API contract both sides must implement |
+| [`default.project.json`](../../src/worker/template/default.project.json) | No | Rojo config mapping folders to Roblox services |
+| [`README.generated.md`](../../src/worker/template/README.generated.md) | No | Documentation for the generated project |
+| [`src/server/Mechanic.server.luau`](../../src/worker/template/src/server/Mechanic.server.luau) | Yes | Server-side game logic |
+| [`src/client/Mechanic.client.luau`](../../src/worker/template/src/client/Mechanic.client.luau) | Yes | Client-side game logic |
+| [`src/shared/GameSpec.json`](../../src/worker/template/src/shared/GameSpec.json) | Yes | The game design specification |
+| [`src/shared/MechanicContract.luau`](../../src/worker/template/src/shared/MechanicContract.luau) | No | Fixed API contract both sides must implement |
 
 ### Rojo file mapping
 
-`default.project.json` maps the file system to the Roblox data model:
+[`default.project.json`](../../src/worker/template/default.project.json) maps the file system to the Roblox data model:
 
 - `src/server/` → `ServerScriptService` (runs on server only)
 - `src/client/` → `StarterPlayerScripts` (runs on each player's client)
@@ -115,7 +115,7 @@ The template lives at `src/worker/template/` and contains 6 files:
 
 ### The contract pattern
 
-`MechanicContract.luau` is immutable and defines:
+[`MechanicContract.luau`](../../src/worker/template/src/shared/MechanicContract.luau) is immutable and defines:
 
 - `remoteEventName = "SocialLoopEvent"` — the single communication channel
 - `requiredServerExports = { "start" }` — server must export `MechanicServer.start()`
@@ -129,18 +129,18 @@ The planner agent outputs a structured spec with fields: `title`, `experienceTyp
 
 ### Deterministic fallback generation
 
-When agents fail, `fallback.ts` generates working code deterministically:
+When agents fail, [`fallback.ts`](../../src/worker/fallback.ts) generates working code deterministically:
 
 - `deriveRobloxSpecFromPrompt()` — Keyword heuristics to infer experience type and generate a spec
 - `materializeFallbackProject()` — Template-based Luau generation using string interpolation. Creates a RemoteEvent, tracks player state, handles rewards, and implements a basic social pulse loop. Designed to always pass evals.
 
 ### Key files
 
-- `src/worker/template/` — All 6 scaffold template files
-- `src/worker/workspace.ts` — `createRunWorkspace()`, `loadArtifactBundle()`, `writeSpecToWorkspace()`, `getFixedScaffoldChecksum()`
-- `src/worker/fallback.ts` — `deriveRobloxSpecFromPrompt()`, `materializeFallbackProject()`, `renderServerScript()`, `renderClientScript()`
-- `src/worker/constants.ts` — File lists and forbidden Lua patterns
-- `src/types.ts` — `RobloxGameSpec` (lines 27-38), `ArtifactBundle` (lines 47-51), `ArtifactFile` (lines 40-45)
+- [`src/worker/template/`](../../src/worker/template/) — All 6 scaffold template files
+- [`src/worker/workspace.ts`](../../src/worker/workspace.ts) — `createRunWorkspace()`, `loadArtifactBundle()`, `writeSpecToWorkspace()`, `getFixedScaffoldChecksum()`
+- [`src/worker/fallback.ts`](../../src/worker/fallback.ts) — `deriveRobloxSpecFromPrompt()`, `materializeFallbackProject()`, `renderServerScript()`, `renderClientScript()`
+- [`src/worker/constants.ts`](../../src/worker/constants.ts) — File lists and forbidden Lua patterns
+- [`src/types.ts`](../../src/types.ts) — `RobloxGameSpec` (lines 27-38), `ArtifactBundle` (lines 47-51), `ArtifactFile` (lines 40-45)
 
 ---
 
@@ -193,9 +193,9 @@ Complex objects like `spec`, `artifactBundle`, and eval `result` are stored as `
 
 ### Key files
 
-- `convex/schema.ts` — Table definitions with indexes
-- `convex/generations.ts` — All mutations, queries, and the `runPipeline` action
-- `src/worker/workerClient.ts` — HTTP client that Convex uses to call the worker (180s timeout for generation, 120s for materialize/evaluate)
+- [`convex/schema.ts`](../../convex/schema.ts) — Table definitions with indexes
+- [`convex/generations.ts`](../../convex/generations.ts) — All mutations, queries, and the `runPipeline` action
+- [`src/worker/workerClient.ts`](../../src/worker/workerClient.ts) — HTTP client that Convex uses to call the worker (180s timeout for generation, 120s for materialize/evaluate)
 
 ---
 
@@ -242,9 +242,9 @@ Additionally, `Bash` and `WebFetch` tools are completely denied at the `disallow
 
 ### Key files
 
-- `src/worker/workspace.ts` — `createRunWorkspace()` (lines 38-48), `loadArtifactBundle()` (lines 100-110), `getFixedScaffoldChecksum()` (lines 120-132)
-- `src/lib/runId.ts` — `isValidRunId()`, `resolveRunDir()`, `isPathWithinDirectory()`
-- `src/worker/harness.ts` — `pathViolatesPolicy()` (lines 255-275), `editViolatesPolicy()` (lines 277-307), `createWorkspaceHooks()` (lines 320-362)
+- [`src/worker/workspace.ts`](../../src/worker/workspace.ts) — `createRunWorkspace()` (lines 38-48), `loadArtifactBundle()` (lines 100-110), `getFixedScaffoldChecksum()` (lines 120-132)
+- [`src/lib/runId.ts`](../../src/lib/runId.ts) — `isValidRunId()`, `resolveRunDir()`, `isPathWithinDirectory()`
+- [`src/worker/harness.ts`](../../src/worker/harness.ts) — `pathViolatesPolicy()` (lines 255-275), `editViolatesPolicy()` (lines 277-307), `createWorkspaceHooks()` (lines 320-362)
 
 ---
 
@@ -264,13 +264,13 @@ All requests are validated with Zod schemas before processing. Errors include a 
 
 ### Deployment boundary
 
-The worker is designed to be independently deployable. It communicates with Convex only via the HTTP interface defined in `workerClient.ts`. In production, it could move to Fly.io or Docker without changing the Convex orchestration layer.
+The worker is designed to be independently deployable. It communicates with Convex only via the HTTP interface defined in [`workerClient.ts`](../../src/worker/workerClient.ts). In production, it could move to Fly.io or Docker without changing the Convex orchestration layer.
 
 ### Key files
 
-- `src/worker/server.ts` — HTTP server with endpoint routing and Zod validation
-- `src/worker/workerClient.ts` — Client used by Convex to call the worker, with per-endpoint timeouts
-- `src/worker/errors.ts` — `HarnessStageError` class for typed failure reporting
+- [`src/worker/server.ts`](../../src/worker/server.ts) — HTTP server with endpoint routing and Zod validation
+- [`src/worker/workerClient.ts`](../../src/worker/workerClient.ts) — Client used by Convex to call the worker, with per-endpoint timeouts
+- [`src/worker/errors.ts`](../../src/worker/errors.ts) — `HarnessStageError` class for typed failure reporting
 
 ---
 
@@ -289,9 +289,9 @@ Fallback usage is always recorded as an event with type `"fallback"` so it's vis
 
 ### Key files
 
-- `src/worker/fallback.ts` — Deterministic spec and Luau generation
-- `src/evals/robloxJudgeEval.ts` — `createFallbackJudgeResult()` (lines 46-124)
-- `src/worker/harness.ts` — `createFallbackEvent()` (lines 176-185), `createFallbackAgentRun()` (lines 187-199)
+- [`src/worker/fallback.ts`](../../src/worker/fallback.ts) — Deterministic spec and Luau generation
+- [`src/evals/robloxJudgeEval.ts`](../../src/evals/robloxJudgeEval.ts) — `createFallbackJudgeResult()` (lines 46-124)
+- [`src/worker/harness.ts`](../../src/worker/harness.ts) — `createFallbackEvent()` (lines 176-185), `createFallbackAgentRun()` (lines 187-199)
 
 ---
 
@@ -301,7 +301,7 @@ The `pnpm benchmark` command runs the full pipeline against a curated dataset to
 
 ### How it works
 
-1. Loads test cases from `src/evals/datasets/roblox-social-v1.json` (12 prompts with expected focus areas)
+1. Loads test cases from [`src/evals/datasets/roblox-social-v1.json`](../../src/evals/datasets/roblox-social-v1.json) (12 prompts with expected focus areas)
 2. Runs each through the complete harness pipeline (planner → builder → evals)
 3. Calculates `averageScore` and `passRate` from the eval results
 4. Writes a timestamped JSON report to `.context/benchmarks/`
@@ -310,9 +310,9 @@ The `pnpm benchmark` command runs the full pipeline against a curated dataset to
 
 ### Key files
 
-- `src/benchmark/runBenchmark.ts` — Dataset runner
-- `src/benchmark/benchmarkReport.ts` — Report generation and comparison
-- `src/evals/datasets/roblox-social-v1.json` — Curated test dataset
+- [`src/benchmark/runBenchmark.ts`](../../src/benchmark/runBenchmark.ts) — Dataset runner
+- [`src/benchmark/benchmarkReport.ts`](../../src/benchmark/benchmarkReport.ts) — Report generation and comparison
+- [`src/evals/datasets/roblox-social-v1.json`](../../src/evals/datasets/roblox-social-v1.json) — Curated test dataset
 
 ---
 
@@ -330,9 +330,9 @@ The same logical type (e.g., `RobloxGameSpec`) is defined in three places becaus
 
 ### Key files
 
-- `src/types.ts` — TypeScript interfaces (single source of truth)
-- `src/lib/schemas.ts` — Zod schemas mirroring the interfaces
-- `src/worker/jsonSchemas.ts` — JSON Schema objects for Claude SDK
+- [`src/types.ts`](../../src/types.ts) — TypeScript interfaces (single source of truth)
+- [`src/lib/schemas.ts`](../../src/lib/schemas.ts) — Zod schemas mirroring the interfaces
+- [`src/worker/jsonSchemas.ts`](../../src/worker/jsonSchemas.ts) — JSON Schema objects for Claude SDK
 
 ---
 
@@ -352,8 +352,8 @@ When a generation fails, `failureStage` records exactly where: `setup`, `expandi
 
 ### Key files
 
-- `convex/generations.ts` — Status transitions in `runPipeline` (lines 207-375)
-- `src/types.ts` — `GenerationStatus` (lines 156-162), `GenerationFailureStage` (lines 164-168)
+- [`convex/generations.ts`](../../convex/generations.ts) — Status transitions in `runPipeline` (lines 207-375)
+- [`src/types.ts`](../../src/types.ts) — `GenerationStatus` (lines 156-162), `GenerationFailureStage` (lines 164-168)
 
 ---
 
@@ -382,6 +382,6 @@ The UI renders these as a trace timeline for each generation, making it possible
 
 ### Key files
 
-- `convex/schema.ts` — `agentRuns` and `agentEvents` table definitions (lines 52-77)
-- `convex/generations.ts` — `saveAgentRun()` (lines 120-140), `saveAgentEvents()` (lines 142-163)
-- `src/worker/harness.ts` — `summarizeMessage()` (lines 103-160) converts SDK messages to event summaries
+- [`convex/schema.ts`](../../convex/schema.ts) — `agentRuns` and `agentEvents` table definitions (lines 52-77)
+- [`convex/generations.ts`](../../convex/generations.ts) — `saveAgentRun()` (lines 120-140), `saveAgentEvents()` (lines 142-163)
+- [`src/worker/harness.ts`](../../src/worker/harness.ts) — `summarizeMessage()` (lines 103-160) converts SDK messages to event summaries
