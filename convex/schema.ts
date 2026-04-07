@@ -1,7 +1,7 @@
 /**
  * Convex schema — defines the two tables that power the app.
  *
- * "generations" tracks each prompt → game pipeline run.
+ * "generations" tracks each prompt → Roblox harness run.
  * "evalRuns" stores individual eval results linked to a generation.
  *
  * Convex is schema-first: you define your tables here and get
@@ -31,9 +31,7 @@ export default defineSchema({
 				v.literal("evaluating"),
 			),
 		),
-		spec: v.optional(v.string()), // JSON stringified GameSpec
-		mechanicCode: v.optional(v.string()),
-		html: v.optional(v.string()),
+		spec: v.optional(v.string()), // JSON stringified RobloxGameSpec
 		artifactType: v.optional(v.literal("roblox-rojo")),
 		artifactBundle: v.optional(v.string()),
 		harnessVersion: v.optional(v.string()),
@@ -43,8 +41,6 @@ export default defineSchema({
 		summaryScore: v.optional(v.float64()),
 		artifactPass: v.optional(v.boolean()),
 		robloxPass: v.optional(v.boolean()),
-		runtimePass: v.optional(v.boolean()),
-		interactionPass: v.optional(v.boolean()),
 		judgeScore: v.optional(v.float64()),
 		error: v.optional(v.string()),
 	}),

@@ -1,15 +1,6 @@
 /**
- * Core types for the "3 Words to Game" pipeline.
- *
- * GameSpec is the structured output from Agent A (Intent Expander).
- * The mechanic builder (Agent B) consumes it and produces JS code
- * that plugs into the fixed engine shell.
+ * Core types for the Roblox harness pipeline.
  */
-
-export interface GameEntity {
-	name: string;
-	role: "player" | "enemy" | "pickup" | "hazard";
-}
 
 export type RobloxExperienceType =
 	| "hangout"
@@ -138,21 +129,6 @@ export interface EvaluateRunResponse {
 	events: AgentEventSummary[];
 }
 
-export interface GameSpec {
-	title: string;
-	genre: "dodge" | "collect" | "survive" | "platform";
-	theme: string;
-	playerGoal: string;
-	controls: string[];
-	entities: GameEntity[];
-	coreLoop: string;
-	winCondition: string;
-	loseCondition: string;
-	scoreRule: string;
-	visualStyle: string;
-	acceptanceTests: string[];
-}
-
 export type GenerationStatus =
 	| "queued"
 	| "expanding"
@@ -166,42 +142,3 @@ export type GenerationFailureStage =
 	| "expanding"
 	| "building"
 	| "evaluating";
-
-export interface RuntimeEvalResult {
-	pass: boolean;
-	errors: string[];
-	readySeen: boolean;
-	snapshot: Record<string, unknown> | null;
-}
-
-export interface InteractionEvalResult {
-	pass: boolean;
-	durationMs: number;
-	framesObserved: number;
-	stateChanged: boolean;
-	scoreChanged: boolean;
-	crashed: boolean;
-}
-
-export interface JudgeEvalResult {
-	genreMatch: number; // 1-5
-	mechanicMatch: number;
-	goalMatch: number;
-	controlsMatch: number;
-	coherence: number;
-	summary: string;
-	criticalMisses: string[];
-}
-
-export interface EvalSuiteResult {
-	runtime: RuntimeEvalResult;
-	interaction: InteractionEvalResult;
-	judge: JudgeEvalResult;
-	summaryScore: number; // 0-100
-}
-
-export interface PipelineResult {
-	spec: GameSpec;
-	mechanicCode: string;
-	html: string;
-}

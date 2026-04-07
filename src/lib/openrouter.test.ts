@@ -74,8 +74,8 @@ describe("chatCompletion", () => {
 
 describe("extractJSON", () => {
 	it("extracts JSON from markdown code fence", () => {
-		const input = '```json\n{"title": "Space Dodge"}\n```';
-		expect(extractJSON(input)).toBe('{"title": "Space Dodge"}');
+		const input = '```json\n{"title": "Mall Hang"}\n```';
+		expect(extractJSON(input)).toBe('{"title": "Mall Hang"}');
 	});
 
 	it("extracts JSON from plain code fence", () => {
@@ -90,11 +90,11 @@ describe("extractJSON", () => {
 
 	it("handles multiline JSON inside fences", () => {
 		const input =
-			'```json\n{\n  "title": "Space Dodge",\n  "genre": "dodge"\n}\n```';
+			'```json\n{\n  "title": "Mall Hang",\n  "experienceType": "hangout"\n}\n```';
 		const result = extractJSON(input);
 		const parsed = JSON.parse(result);
-		expect(parsed.title).toBe("Space Dodge");
-		expect(parsed.genre).toBe("dodge");
+		expect(parsed.title).toBe("Mall Hang");
+		expect(parsed.experienceType).toBe("hangout");
 	});
 
 	it("handles text before and after fences", () => {
