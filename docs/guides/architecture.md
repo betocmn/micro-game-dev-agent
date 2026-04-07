@@ -111,7 +111,7 @@ Endpoints:
 
 ## Artifact contract
 
-The live artifact is no longer playable browser HTML. It is a fixed Rojo-style bundle:
+The live artifact is a fixed Rojo-style bundle:
 
 ```text
 ArtifactBundle {
