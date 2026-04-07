@@ -290,4 +290,40 @@ describe("getWorkspaceToolViolation", () => {
 			),
 		).toBe(`Path traversal is blocked: ${traversalPath}`);
 	});
+
+	it("allows discovery tools to target the workspace root", () => {
+		expect(
+			getWorkspaceToolViolation(
+				"Glob",
+				{
+					pattern: "**/*",
+					path: workspaceDir,
+				},
+				workspaceDir,
+			),
+		).toBeNull();
+
+		expect(
+			getWorkspaceToolViolation(
+				"Grep",
+				{
+					pattern: "ready",
+					path: workspaceDir,
+				},
+				workspaceDir,
+			),
+		).toBeNull();
+	});
+
+	it("blocks traversal in glob patterns", () => {
+		expect(
+			getWorkspaceToolViolation(
+				"Glob",
+				{
+					pattern: "../secrets/*",
+				},
+				workspaceDir,
+			),
+		).toBe("Path traversal is blocked: ../secrets/*");
+	});
 });

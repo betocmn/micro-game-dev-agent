@@ -225,6 +225,24 @@ function isPathInputKey(key: string): boolean {
 	return key === "path" || key.endsWith("_path");
 }
 
+function getToolPathInputs(toolName: string, rawInput: unknown): string[] {
+	const pathInputs = getPathInputs(rawInput);
+	if (!rawInput || typeof rawInput !== "object") {
+		return pathInputs;
+	}
+
+	const toolInput = rawInput as Record<string, unknown>;
+	if (toolName === "Glob" && typeof toolInput.pattern === "string") {
+		return [...pathInputs, toolInput.pattern];
+	}
+
+	if (toolName === "Grep" && typeof toolInput.glob === "string") {
+		return [...pathInputs, toolInput.glob];
+	}
+
+	return pathInputs;
+}
+
 function getPathInputs(
 	rawInput: unknown,
 	currentKey: string | null = null,
@@ -259,16 +277,19 @@ function resolveWorkspaceRelativePath(
 		return null;
 	}
 
-	return path
+	const relativePath = path
 		.relative(path.resolve(workspaceDir), resolvedPath)
 		.replaceAll(path.sep, "/");
+
+	return relativePath.length === 0 ? "." : relativePath;
 }
 
 function pathViolatesPolicy(
+	toolName: string,
 	rawInput: unknown,
 	workspaceDir: string,
 ): string | null {
-	for (const value of getPathInputs(rawInput)) {
+	for (const value of getToolPathInputs(toolName, rawInput)) {
 		if (value.includes(".env")) {
 			return "Access to .env files is blocked.";
 		}
@@ -278,7 +299,7 @@ function pathViolatesPolicy(
 		if (hasTraversalSegment(value)) {
 			return `Path traversal is blocked: ${value}`;
 		}
-		if (!resolveWorkspaceRelativePath(workspaceDir, value)) {
+		if (resolveWorkspaceRelativePath(workspaceDir, value) === null) {
 			return `Path ${value} is outside the allowed workspace.`;
 		}
 	}
@@ -324,7 +345,7 @@ export function getWorkspaceToolViolation(
 	workspaceDir: string,
 ): string | null {
 	return (
-		pathViolatesPolicy(toolInput, workspaceDir) ??
+		pathViolatesPolicy(toolName, toolInput, workspaceDir) ??
 		editViolatesPolicy(toolName, toolInput, workspaceDir)
 	);
 }
