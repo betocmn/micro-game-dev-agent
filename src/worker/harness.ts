@@ -112,60 +112,223 @@ function ensureOpenRouterApiKey(): string {
 	return apiKey;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === "object" && value !== null;
+}
+
+function truncateSummary(text: string, maxLength = 220): string {
+	const normalized = text.replace(/\s+/g, " ").trim();
+	if (normalized.length <= maxLength) {
+		return normalized;
+	}
+
+	return `${normalized.slice(0, maxLength - 1).trimEnd()}…`;
+}
+
+function stringifyUnknown(value: unknown): string {
+	if (typeof value === "string") {
+		return value;
+	}
+
+	const serialized = JSON.stringify(value);
+	return serialized ?? String(value);
+}
+
+function serializeTracePayload(message: SDKMessage): string {
+	return stringifyUnknown(message);
+}
+
+function extractAssistantContentSummary(message: SDKMessage): string | null {
+	if (message.type !== "assistant") {
+		return null;
+	}
+
+	const content = isRecord(message.message) ? message.message.content : null;
+	if (!Array.isArray(content)) {
+		return null;
+	}
+
+	for (const block of content) {
+		if (!isRecord(block)) {
+			continue;
+		}
+
+		if (typeof block.text === "string" && block.text.trim().length > 0) {
+			return truncateSummary(block.text);
+		}
+
+		if (
+			typeof block.thinking === "string" &&
+			block.thinking.trim().length > 0
+		) {
+			return truncateSummary(`Thinking: ${block.thinking}`);
+		}
+
+		if (typeof block.name === "string") {
+			return `Assistant called ${block.name}.`;
+		}
+	}
+
+	return null;
+}
+
+function summarizeResultMessage(message: SDKResultMessage): string {
+	if (message.subtype !== "success") {
+		return `Failed with ${message.subtype}`;
+	}
+
+	if (message.result.trim().length > 0) {
+		return truncateSummary(message.result);
+	}
+
+	return `Completed in ${message.num_turns} turns`;
+}
+
+function createTraceEvent(
+	type: string,
+	summary: string,
+	message: SDKMessage,
+): AgentEventSummary {
+	return {
+		type,
+		summary,
+		payload: serializeTracePayload(message),
+	};
+}
+
 function summarizeMessage(message: SDKMessage): AgentEventSummary | null {
 	if (message.type === "tool_use_summary") {
-		return { type: "tool_use_summary", summary: message.summary };
+		return createTraceEvent("tool_use_summary", message.summary, message);
 	}
 
 	if (message.type === "tool_progress") {
-		return {
-			type: "tool_progress",
-			summary: `${message.tool_name} running for ${message.elapsed_time_seconds}s`,
-		};
+		return createTraceEvent(
+			"tool_progress",
+			`${message.tool_name} running for ${message.elapsed_time_seconds}s`,
+			message,
+		);
 	}
 
 	if (message.type === "system") {
+		if (message.subtype === "init") {
+			return createTraceEvent(
+				"init",
+				`Session initialized with ${message.model} in ${message.cwd}`,
+				message,
+			);
+		}
 		if (message.subtype === "task_progress") {
-			return {
-				type: "task_progress",
-				summary: message.summary ?? message.description,
-			};
+			return createTraceEvent(
+				"task_progress",
+				message.summary ?? message.description,
+				message,
+			);
 		}
 		if (message.subtype === "task_started") {
-			return {
-				type: "task_started",
-				summary: message.description,
-			};
+			return createTraceEvent("task_started", message.description, message);
+		}
+		if (message.subtype === "task_notification") {
+			return createTraceEvent("task_notification", message.summary, message);
 		}
 		if (message.subtype === "session_state_changed") {
-			return {
-				type: "session_state_changed",
-				summary: `Session is ${message.state}`,
-			};
+			return createTraceEvent(
+				"session_state_changed",
+				`Session is ${message.state}`,
+				message,
+			);
 		}
 		if (message.subtype === "status" && message.status) {
-			return {
-				type: "status",
-				summary: message.status,
-			};
+			return createTraceEvent("status", message.status, message);
+		}
+		if (message.subtype === "api_retry") {
+			return createTraceEvent(
+				"api_retry",
+				`Retry ${message.attempt}/${message.max_retries} after ${message.error}`,
+				message,
+			);
+		}
+		if (message.subtype === "local_command_output") {
+			return createTraceEvent(
+				"local_command_output",
+				truncateSummary(message.content),
+				message,
+			);
+		}
+		if (message.subtype === "hook_started") {
+			return createTraceEvent(
+				"hook_started",
+				`${message.hook_name} started for ${message.hook_event}`,
+				message,
+			);
+		}
+		if (message.subtype === "hook_progress") {
+			return createTraceEvent(
+				"hook_progress",
+				`${message.hook_name} produced output`,
+				message,
+			);
+		}
+		if (message.subtype === "hook_response") {
+			return createTraceEvent(
+				"hook_response",
+				`${message.hook_name} ${message.outcome}`,
+				message,
+			);
+		}
+		if (message.subtype === "files_persisted") {
+			return createTraceEvent(
+				"files_persisted",
+				`${message.files.length} files persisted`,
+				message,
+			);
+		}
+		if (message.subtype === "compact_boundary") {
+			return createTraceEvent(
+				"compact_boundary",
+				`Context compacted (${message.compact_metadata.trigger})`,
+				message,
+			);
+		}
+		if (message.subtype === "elicitation_complete") {
+			return createTraceEvent(
+				"elicitation_complete",
+				`Elicitation completed for ${message.mcp_server_name}`,
+				message,
+			);
 		}
 	}
 
 	if (message.type === "assistant") {
-		return {
-			type: "assistant",
-			summary: "Assistant responded with an implementation update.",
-		};
+		return createTraceEvent(
+			"assistant",
+			extractAssistantContentSummary(message) ??
+				"Assistant responded with an implementation update.",
+			message,
+		);
 	}
 
 	if (message.type === "result") {
-		return {
-			type: "result",
-			summary:
-				message.subtype === "success"
-					? `Completed in ${message.num_turns} turns`
-					: `Failed with ${message.subtype}`,
-		};
+		return createTraceEvent("result", summarizeResultMessage(message), message);
+	}
+
+	if (message.type === "auth_status") {
+		return createTraceEvent(
+			"auth_status",
+			truncateSummary(message.output.join(" ")),
+			message,
+		);
+	}
+
+	if (message.type === "prompt_suggestion") {
+		return createTraceEvent("prompt_suggestion", message.suggestion, message);
+	}
+
+	if (message.type === "rate_limit_event") {
+		return createTraceEvent(
+			"rate_limit_event",
+			"Rate limit status updated.",
+			message,
+		);
 	}
 
 	return null;
