@@ -724,7 +724,6 @@ export async function evaluateRobloxRun(
 	let failureStage: GenerationFailureStage = "setup";
 
 	try {
-		const anthropicApiKey = ensureAnthropicApiKey();
 		const runQuery = dependencies.runQuery ?? query;
 		const templateBundle = await getTemplateBundle();
 		const expectedScaffoldChecksum = getFixedScaffoldChecksum(templateBundle);
@@ -760,6 +759,7 @@ export async function evaluateRobloxRun(
 		if (shouldRepair) {
 			failureStage = "building";
 			try {
+				const anthropicApiKey = ensureAnthropicApiKey();
 				repairRun = await materializeProject(
 					anthropicApiKey,
 					request.prompt,
