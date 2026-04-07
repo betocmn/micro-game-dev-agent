@@ -11,8 +11,10 @@ import { writeFileSync } from "node:fs";
 import { buildMechanic } from "../agents/buildMechanic";
 import { expandIntent } from "../agents/expandIntent";
 import { compileGame } from "../compile/compileGame";
+import { ensureLocalEnvLoaded } from "../lib/loadEnv";
 
 async function main() {
+	ensureLocalEnvLoaded();
 	const prompt = process.argv[2] || "space dodge rocks";
 	const apiKey = process.env.OPENROUTER_API_KEY;
 
